@@ -62,53 +62,11 @@ class AuthView extends GetView<AuthController> {
                     ),
                     const SizedBox(height: 24),
                     const Text(
-                      'Log in once with your registered mobile number to stream all live TV channels directly to your big screen.',
+                      'Log in with your registered Jio mobile number to access all live TV channels, high-definition regional broadcasts, and real-time EPG program schedules.',
                       style: TextStyle(
                         fontSize: 14,
                         height: 1.6,
                         color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    // Demo Mode Quick Button
-                    Focus(
-                      child: Builder(
-                        builder: (ctx) {
-                          final hasFocus = Focus.of(ctx).hasFocus;
-                          return InkWell(
-                            onTap: () => controller.continueAsDemo(),
-                            borderRadius: BorderRadius.circular(12),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                              decoration: BoxDecoration(
-                                color: hasFocus ? AppColors.focusedBackground : AppColors.surfaceElevated,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: hasFocus ? AppColors.primary : AppColors.unfocusedBorder,
-                                  width: hasFocus ? 2 : 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.play_circle_outline_rounded,
-                                    color: hasFocus ? AppColors.primary : AppColors.textSecondary,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    'Skip Login (Demo Mode)',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: hasFocus ? AppColors.primary : Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
                       ),
                     ),
                   ],

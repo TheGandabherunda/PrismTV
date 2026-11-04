@@ -26,13 +26,19 @@ void main() {
       expect(channel.fullLogoUrl, contains('colors_kannada.png'));
     });
 
-    test('AuthSession demo session creates valid non-expired credentials', () {
-      final demo = AuthSession.demo();
+    test('AuthSession creates and validates active credentials', () {
+      final session = AuthSession(
+        ssoToken: 'test_token',
+        uniqueId: 'test_user',
+        crmid: 'test_crm',
+        mobileNumber: '+919876543210',
+        expiresAt: DateTime.now().add(const Duration(days: 30)),
+      );
 
-      expect(demo.isDemo, true);
-      expect(demo.isValid, true);
-      expect(demo.ssoToken.isNotEmpty, true);
-      expect(demo.uniqueId, 'prism_demo_user');
+      expect(session.isValid, true);
+      expect(session.ssoToken, 'test_token');
+      expect(session.uniqueId, 'test_user');
+      expect(session.mobileNumber, '+919876543210');
     });
 
     test('EpgProgramModel calculates progress and status properly', () {

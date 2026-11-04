@@ -24,11 +24,6 @@ class AuthRepository {
     return _jioSource.verifyOtp(phoneNumber, otp);
   }
 
-  Future<void> loginAsDemo() async {
-    final demoSession = AuthSession.demo();
-    await HiveService.saveSession(demoSession);
-  }
-
   Future<void> logout() async {
     await HiveService.clearSession();
   }

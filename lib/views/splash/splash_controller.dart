@@ -26,8 +26,8 @@ class SplashController extends GetxController {
       _authRepo.autoRefreshSession();
       Get.offAllNamed(AppRoutes.home);
     } else {
-      // If not logged in, go straight to home with demo/preview access
-      Get.offAllNamed(AppRoutes.home);
+      // Login is mandatory to access channels and watch
+      Get.offAllNamed(AppRoutes.auth);
     }
   }
 }

@@ -93,7 +93,6 @@ class JioLiveSource implements ILiveTvSource {
             crmid: crmid,
             mobileNumber: formattedNumber,
             expiresAt: DateTime.now().add(const Duration(days: 30)),
-            isDemo: false,
           );
           await HiveService.saveSession(session);
           return session;
@@ -105,7 +104,6 @@ class JioLiveSource implements ILiveTvSource {
 
   /// Refreshes the existing session SSO token
   Future<AuthSession?> refreshSession(AuthSession currentSession) async {
-    if (currentSession.isDemo) return currentSession;
     try {
       final response = await http.post(
         Uri.parse(ApiEndpoints.refreshOtpUrl),
@@ -127,7 +125,6 @@ class JioLiveSource implements ILiveTvSource {
           crmid: currentSession.crmid,
           mobileNumber: currentSession.mobileNumber,
           expiresAt: DateTime.now().add(const Duration(days: 30)),
-          isDemo: false,
         );
         await HiveService.saveSession(updated);
         return updated;
@@ -227,7 +224,7 @@ class JioLiveSource implements ILiveTvSource {
   Future<StreamPlaybackInfo> resolveStream(ChannelModel channel) async {
     final session = HiveService.getSavedSession();
 
-    if (session != null && !session.isDemo && session.ssoToken.isNotEmpty) {
+    if (session != null && session.ssoToken.isNotEmpty) {
       try {
         final response = await http.post(
           Uri.parse(ApiEndpoints.playbackBaseUrl),

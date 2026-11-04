@@ -105,6 +105,10 @@ class HomeController extends GetxController {
   }
 
   void playChannel(ChannelModel channel) {
+    if (!_authRepo.isAuthenticated) {
+      Get.toNamed(AppRoutes.auth);
+      return;
+    }
     Get.toNamed(
       AppRoutes.player,
       arguments: {
@@ -122,7 +126,7 @@ class HomeController extends GetxController {
 
   void logout() async {
     await _authRepo.logout();
-    loadChannels();
+    Get.offAllNamed(AppRoutes.auth);
   }
 }
 

@@ -94,15 +94,6 @@ class AuthController extends GetxController {
     }
   }
 
-  Future<void> continueAsDemo() async {
-    isLoading.value = true;
-    _showFeedback('Initializing Demo Preview Mode...');
-    await _authRepo.loginAsDemo();
-    await Future.delayed(const Duration(milliseconds: 400));
-    isLoading.value = false;
-    Get.offAllNamed(AppRoutes.home);
-  }
-
   void _startCountdown() {
     resendCountdown.value = 60;
     _timer?.cancel();
