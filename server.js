@@ -53,13 +53,22 @@ const server = http.createServer((req, res) => {
       const isHttps = u.protocol === 'https:';
       const client = isHttps ? https : http;
 
+      // Extract hdnea if present in query
+      const hdneaToken = u.searchParams.get('hdnea') || u.searchParams.get('__hdnea__') || '';
+
+      const outgoingHeaders = {
+        'User-Agent': 'plaYtv/7.1.8 (Linux;Android 8.1.0) ExoPlayerLib/2.11.7',
+        'Accept': '*/*',
+        'Connection': 'keep-alive',
+      };
+
+      if (hdneaToken) {
+        outgoingHeaders['Cookie'] = `__hdnea__=${hdneaToken}`;
+      }
+
       const proxyReq = client.request(targetUrl, {
         method: req.method,
-        headers: {
-          'User-Agent': 'plaYtv/7.0.8 (Linux;Android 13) ExoPlayerLib/2.11.7',
-          'Accept': '*/*',
-          'Connection': 'keep-alive',
-        }
+        headers: outgoingHeaders,
       }, (proxyRes) => {
         // Check for redirect (302/301)
         if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
@@ -81,6 +90,8 @@ const server = http.createServer((req, res) => {
           proxyRes.on('data', chunk => body += chunk);
           proxyRes.on('end', () => {
             const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
+            const parentSearch = u.search; // Contains ?hdnea=...
+
             const lines = body.split('\n');
             const rewritten = lines.map(line => {
               const trimmed = line.trim();
@@ -88,7 +99,10 @@ const server = http.createServer((req, res) => {
                 // If the line contains URI="...", rewrite that URI as well (e.g. audio/subtitle tracks, keys)
                 if (trimmed.includes('URI="')) {
                   return trimmed.replace(/URI="([^"]+)"/, (match, uri) => {
-                    const fullUri = uri.startsWith('http') ? uri : new URL(uri, baseUrl).toString();
+                    let fullUri = uri.startsWith('http') ? uri : new URL(uri, baseUrl).toString();
+                    if (!fullUri.includes('?') && parentSearch) {
+                      fullUri += parentSearch;
+                    }
                     return `URI="/api/stream-proxy?url=${encodeURIComponent(fullUri)}"`;
                   });
                 }
@@ -99,6 +113,11 @@ const server = http.createServer((req, res) => {
               if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
                 fullSegmentUrl = new URL(trimmed, baseUrl).toString();
               }
+              // If segment URL has no query params, attach the parent playlist's query (hdnea token)
+              if (!fullSegmentUrl.includes('?') && parentSearch) {
+                fullSegmentUrl += parentSearch;
+              }
+
               return `/api/stream-proxy?url=${encodeURIComponent(fullSegmentUrl)}`;
             }).join('\n');
 
@@ -141,37 +160,78 @@ const server = http.createServer((req, res) => {
     const targetPath = req.url.replace('/api/proxy', '');
     console.log(`[API PROXY] ${req.method} -> https://jiotvapi.media.jio.com${targetPath}`);
 
-    const proxyHeaders = { ...req.headers };
-    delete proxyHeaders['host'];
-    delete proxyHeaders['origin'];
-    delete proxyHeaders['referer'];
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => {
+      const bodyBuffer = Buffer.concat(chunks);
 
-    const proxyReq = https.request({
-      hostname: 'jiotvapi.media.jio.com',
-      port: 443,
-      path: targetPath,
-      method: req.method,
-      headers: {
-        ...proxyHeaders,
-        host: 'jiotvapi.media.jio.com',
+      const proxyHeaders = { ...req.headers };
+      delete proxyHeaders['host'];
+      delete proxyHeaders['origin'];
+      delete proxyHeaders['referer'];
+      delete proxyHeaders['connection'];
+      delete proxyHeaders['content-length'];
+
+      // Always enforce Jio expected headers
+      proxyHeaders['host'] = 'jiotvapi.media.jio.com';
+      proxyHeaders['user-agent'] = 'okhttp/4.12.0';
+
+      // If accesstoken or accessToken header is present, ensure both casings exist
+      const token = proxyHeaders['accesstoken'] || proxyHeaders['accesstoken'];
+      if (token) {
+        proxyHeaders['accesstoken'] = token;
+        proxyHeaders['accessToken'] = token;
       }
-    }, (proxyRes) => {
-      const responseHeaders = { ...proxyRes.headers };
-      responseHeaders['Access-Control-Allow-Origin'] = '*';
-      responseHeaders['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
-      responseHeaders['Access-Control-Allow-Headers'] = '*';
 
-      res.writeHead(proxyRes.statusCode, responseHeaders);
-      proxyRes.pipe(res);
+      // If ssotoken or ssoToken header is present, ensure both casings exist
+      const sso = proxyHeaders['ssotoken'] || proxyHeaders['ssotoken'];
+      if (sso) {
+        proxyHeaders['ssotoken'] = sso;
+        proxyHeaders['ssoToken'] = sso;
+      }
+
+      if (bodyBuffer.length > 0) {
+        proxyHeaders['content-length'] = bodyBuffer.length;
+      }
+
+      const proxyReq = https.request({
+        hostname: 'jiotvapi.media.jio.com',
+        port: 443,
+        path: targetPath,
+        method: req.method,
+        headers: proxyHeaders,
+      }, (proxyRes) => {
+        const resChunks = [];
+        proxyRes.on('data', c => resChunks.push(c));
+        proxyRes.on('end', () => {
+          const resBuffer = Buffer.concat(resChunks);
+          console.log(`[API PROXY RESP] ${proxyRes.statusCode} for ${targetPath} (Length: ${resBuffer.length})`);
+          if (proxyRes.statusCode !== 200 && proxyRes.statusCode !== 204) {
+            console.log(`[API PROXY ERR BODY]`, resBuffer.toString('utf8'));
+          }
+
+          const responseHeaders = { ...proxyRes.headers };
+          responseHeaders['Access-Control-Allow-Origin'] = '*';
+          responseHeaders['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+          responseHeaders['Access-Control-Allow-Headers'] = '*';
+          delete responseHeaders['content-length'];
+
+          res.writeHead(proxyRes.statusCode, responseHeaders);
+          res.end(resBuffer);
+        });
+      });
+
+      proxyReq.on('error', (err) => {
+        console.error('[API PROXY ERROR]', err.message);
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ error: 'Proxy request failed', details: err.message }));
+      });
+
+      if (bodyBuffer.length > 0) {
+        proxyReq.write(bodyBuffer);
+      }
+      proxyReq.end();
     });
-
-    proxyReq.on('error', (err) => {
-      console.error('[API PROXY ERROR]', err.message);
-      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-      res.end(JSON.stringify({ error: 'Proxy request failed', details: err.message }));
-    });
-
-    req.pipe(proxyReq);
     return;
   }
 

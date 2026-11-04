@@ -81,17 +81,22 @@ class JioLiveSource implements ILiveTvSource {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final authToken = data['authToken'] ?? data['accessToken'] ?? '';
+        final refreshToken = data['refreshToken'] ?? '';
         final ssoToken = data['ssoToken'] ?? '';
         final sessionAttrs = data['sessionAttributes'] ?? {};
         final userAttrs = sessionAttrs['user'] ?? {};
         final uniqueId = userAttrs['unique'] ?? userAttrs['uniqueId'] ?? '';
         final crmid = userAttrs['subscriberId'] ?? userAttrs['crmid'] ?? '';
 
-        if (ssoToken.isNotEmpty) {
+        if (authToken.isNotEmpty && ssoToken.isNotEmpty) {
           final session = AuthSession(
+            accessToken: authToken,
+            refreshToken: refreshToken,
             ssoToken: ssoToken,
             uniqueId: uniqueId,
             crmid: crmid,
+            subscriberId: crmid,
             mobileNumber: formattedNumber,
             expiresAt: DateTime.now().add(const Duration(days: 30)),
           );
@@ -113,7 +118,7 @@ class JioLiveSource implements ILiveTvSource {
           'uniqueId': currentSession.uniqueId,
           'devicetype': 'phone',
           'os': 'android',
-          'User-Agent': ApiEndpoints.defaultUserAgent,
+          'User-Agent': 'okhttp/4.12.0',
         },
       );
 
@@ -121,9 +126,12 @@ class JioLiveSource implements ILiveTvSource {
         final data = jsonDecode(response.body);
         final newToken = data['ssoToken'] ?? currentSession.ssoToken;
         final updated = AuthSession(
+          accessToken: currentSession.accessToken,
+          refreshToken: currentSession.refreshToken,
           ssoToken: newToken,
           uniqueId: currentSession.uniqueId,
           crmid: currentSession.crmid,
+          subscriberId: currentSession.subscriberId,
           mobileNumber: currentSession.mobileNumber,
           expiresAt: DateTime.now().add(const Duration(days: 30)),
         );
@@ -225,7 +233,7 @@ class JioLiveSource implements ILiveTvSource {
   Future<StreamPlaybackInfo> resolveStream(ChannelModel channel) async {
     final session = HiveService.getSavedSession();
 
-    if (session == null || session.ssoToken.isEmpty) {
+    if (session == null || !session.isValid) {
       throw Exception('Authentication required. Please log in with your Jio number to stream live TV.');
     }
 
@@ -249,6 +257,8 @@ class JioLiveSource implements ILiveTvSource {
         'channel_id': channel.channelId.toString(),
         'crmid': session.crmid,
         'userId': session.crmid,
+        'subscriberId': session.crmid,
+        'uniqueId': session.uniqueId,
         'deviceId': '689f928e469502ab',
         'devicetype': 'phone',
         'isott': 'false',
@@ -256,12 +266,12 @@ class JioLiveSource implements ILiveTvSource {
         'lbcookie': '1',
         'os': 'android',
         'osVersion': '13',
-        'subscriberId': session.crmid,
-        'uniqueId': session.uniqueId,
         'usergroup': 'tvYR7NSNn7rymo3F',
-        'User-Agent': 'plaYtv/7.0.8 (Linux;Android 13) ExoPlayerLib/2.11.7',
-        'versionCode': '340',
-        'accesstoken': session.ssoToken,
+        'User-Agent': 'okhttp/4.12.0',
+        'versionCode': '422',
+        'accessToken': session.accessToken,
+        'accesstoken': session.accessToken,
+        'ssoToken': session.ssoToken,
         'ssotoken': session.ssoToken,
       };
 
@@ -280,6 +290,18 @@ class JioLiveSource implements ILiveTvSource {
         }
 
         if (rawStreamUrl.isNotEmpty) {
+          // Extract hdnea if present anywhere
+          String hdnea = '';
+          final match = RegExp(r'hdnea=([^&]+)').firstMatch(rawStreamUrl);
+          if (match != null) {
+            hdnea = match.group(1) ?? '';
+          }
+
+          if (hdnea.isNotEmpty && !rawStreamUrl.contains('hdnea=')) {
+            final sep = rawStreamUrl.contains('?') ? '&' : '?';
+            rawStreamUrl = '$rawStreamUrl${sep}hdnea=$hdnea';
+          }
+
           // On Web, route through local stream proxy to bypass browser CORS on video segments
           final finalStreamUrl = kIsWeb
               ? '/api/stream-proxy?url=${Uri.encodeComponent(rawStreamUrl)}'
@@ -288,18 +310,20 @@ class JioLiveSource implements ILiveTvSource {
           return StreamPlaybackInfo(
             streamUrl: finalStreamUrl,
             headers: {
-              'User-Agent': ApiEndpoints.defaultUserAgent,
-              'Cookie': 'ssotoken=${session.ssoToken}',
+              'User-Agent': 'plaYtv/7.1.8 (Linux;Android 8.1.0) ExoPlayerLib/2.11.7',
+              'Cookie': 'ssotoken=${session.ssoToken}${hdnea.isNotEmpty ? '; __hdnea__=$hdnea' : ''}',
             },
             isHls: true,
           );
+        } else {
+          throw Exception('No playable stream URL returned: ${response.body}');
         }
+      } else {
+        throw Exception('Playback API returned status ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
       throw Exception('Failed to connect to ${channel.channelName} stream: $e');
     }
-
-    throw Exception('Stream unavailable for ${channel.channelName}. Active subscription required.');
   }
 
   List<ChannelModel> _buildSampleChannels() {

@@ -19,6 +19,81 @@
 
   <!-- HLS.js Engine for Web Video Playback (Essential for Chrome / Edge) -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+  <script>
+    (function() {
+      if (!window.Hls) return;
+      var mediaProto = HTMLMediaElement.prototype;
+      var originalSrcDesc = Object.getOwnPropertyDescriptor(mediaProto, 'src') ||
+                            Object.getOwnPropertyDescriptor(HTMLVideoElement.prototype, 'src');
+      var originalSet = originalSrcDesc ? originalSrcDesc.set : function(v) { this.setAttribute('src', v); };
+      var originalGet = originalSrcDesc ? originalSrcDesc.get : function() { return this.getAttribute('src'); };
+
+      var hlsInstances = new WeakMap();
+
+      Object.defineProperty(HTMLVideoElement.prototype, 'src', {
+        set: function(val) {
+          var video = this;
+          var oldHls = hlsInstances.get(video);
+          if (oldHls) {
+            oldHls.destroy();
+            hlsInstances.delete(video);
+          }
+
+          if (!val) {
+            originalSet.call(video, '');
+            return;
+          }
+
+          var canNativePlay = video.canPlayType('application/vnd.apple.mpegurl');
+          var isNativeSupported = canNativePlay === 'probably' || (canNativePlay === 'maybe' && !navigator.userAgent.includes('Chrome') && !navigator.userAgent.includes('Edg'));
+          var isHlsSource = typeof val === 'string' && (val.includes('.m3u8') || val.includes('stream-proxy'));
+
+          if (isHlsSource && !isNativeSupported && Hls.isSupported()) {
+            console.log('[PrismTV] Attaching Hls.js to HTMLVideoElement for stream:', val);
+            var hls = new Hls({
+              enableWorker: true,
+              lowLatencyMode: true,
+              backBufferLength: 30,
+              maxBufferLength: 30,
+              maxMaxBufferLength: 60,
+            });
+            hlsInstances.set(video, hls);
+
+            hls.attachMedia(video);
+            hls.on(Hls.Events.MEDIA_ATTACHED, function() {
+              hls.loadSource(val);
+            });
+            hls.on(Hls.Events.ERROR, function(event, data) {
+              if (data.fatal) {
+                switch(data.type) {
+                  case Hls.ErrorTypes.NETWORK_ERROR:
+                    console.warn('[PrismTV Hls Network Error] Recovering...', data);
+                    hls.startLoad();
+                    break;
+                  case Hls.ErrorTypes.MEDIA_ERROR:
+                    console.warn('[PrismTV Hls Media Error] Recovering...', data);
+                    hls.recoverMediaError();
+                    break;
+                  default:
+                    console.error('[PrismTV Hls Fatal Error]', data);
+                    hls.destroy();
+                    break;
+                }
+              }
+            });
+          } else {
+            originalSet.call(video, val);
+          }
+        },
+        get: function() {
+          return originalGet.call(this);
+        },
+        configurable: true,
+        enumerable: true,
+      });
+      console.log('[PrismTV] Hls.js Media Source bridge loaded.');
+    })();
+  </script>
 
   <title>PrismTV · TheGandabherunda</title>
   <link rel="manifest" href="manifest.json">

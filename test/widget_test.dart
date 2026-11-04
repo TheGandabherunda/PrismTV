@@ -28,6 +28,8 @@ void main() {
 
     test('AuthSession creates and validates active credentials', () {
       final session = AuthSession(
+        accessToken: 'test_access_token',
+        refreshToken: 'test_refresh_token',
         ssoToken: 'test_token',
         uniqueId: 'test_user',
         crmid: 'test_crm',
@@ -36,9 +38,16 @@ void main() {
       );
 
       expect(session.isValid, true);
+      expect(session.accessToken, 'test_access_token');
       expect(session.ssoToken, 'test_token');
       expect(session.uniqueId, 'test_user');
       expect(session.mobileNumber, '+919876543210');
+
+      final json = session.toJson();
+      final restored = AuthSession.fromJson(json);
+      expect(restored.accessToken, 'test_access_token');
+      expect(restored.ssoToken, 'test_token');
+      expect(restored.isValid, true);
     });
 
     test('EpgProgramModel calculates progress and status properly', () {

@@ -77,7 +77,12 @@ class PlayerController extends GetxController {
       isPlaying.value = true;
       isBuffering.value = false;
     } catch (e) {
-      streamError.value = 'Unable to establish stream connection. Retrying...';
+      debugPrint('[PRISM_PLAYER_ERROR] $e');
+      if (e.toString().contains('Authentication') || e.toString().contains('419') || e.toString().contains('401')) {
+        streamError.value = 'Session expired. Please log in again from Profile.';
+      } else {
+        streamError.value = 'Unable to establish stream connection. Retrying...';
+      }
       isBuffering.value = false;
     }
   }
