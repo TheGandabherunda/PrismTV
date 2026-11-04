@@ -24,7 +24,7 @@ class HomeView extends GetView<HomeController> {
               selectedIndex: controller.selectedSidebarIndex.value,
               onSelect: controller.selectSidebar,
               isAuthenticated: controller.isAuthenticated,
-              onAuthAction: controller.openAuthScreen,
+              onAuthAction: controller.onProfileTapped,
             ),
           ),
 

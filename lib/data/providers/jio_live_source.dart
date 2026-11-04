@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../core/constants/api_endpoints.dart';
 import '../../core/storage/hive_service.dart';
@@ -229,28 +230,63 @@ class JioLiveSource implements ILiveTvSource {
     }
 
     try {
+      final now = DateTime.now().toUtc();
+      String pad(int n) => n.toString().padLeft(2, '0');
+      final yyyy = now.year.toString();
+      final mm = pad(now.month);
+      final dd = pad(now.day);
+      final hh = pad(now.hour);
+      final mi = pad(now.minute);
+      final ss = pad(now.second);
+      final beginStr = '$yyyy$mm${dd}T$hh$mi$ss';
+      final srnoStr = '$yyyy$mm$dd';
+
+      final formBody = 'channel_id=${channel.channelId}&stream_type=Seek&begin=$beginStr&srno=$srnoStr';
+
+      final requestHeaders = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'appkey': 'NzNiMDhlYzQyNjJm',
+        'channel_id': channel.channelId.toString(),
+        'crmid': session.crmid,
+        'userId': session.crmid,
+        'deviceId': '689f928e469502ab',
+        'devicetype': 'phone',
+        'isott': 'false',
+        'languageId': '6',
+        'lbcookie': '1',
+        'os': 'android',
+        'osVersion': '13',
+        'subscriberId': session.crmid,
+        'uniqueId': session.uniqueId,
+        'usergroup': 'tvYR7NSNn7rymo3F',
+        'User-Agent': 'plaYtv/7.0.8 (Linux;Android 13) ExoPlayerLib/2.11.7',
+        'versionCode': '340',
+        'accesstoken': session.ssoToken,
+        'ssotoken': session.ssoToken,
+      };
+
       final response = await http.post(
         Uri.parse(ApiEndpoints.playbackBaseUrl),
-        headers: {
-          'ssotoken': session.ssoToken,
-          'channel_id': channel.channelId.toString(),
-          'crmid': session.crmid,
-          'uniqueId': session.uniqueId,
-          'User-Agent': ApiEndpoints.defaultUserAgent,
-          'deviceType': 'phone',
-          'os': 'android',
-          'appkey': ApiEndpoints.appKey,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'stream_type=Live&channel_id=${channel.channelId}',
+        headers: requestHeaders,
+        body: formBody,
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final streamUrl = data['result'] ?? '';
-        if (streamUrl.isNotEmpty) {
+        String rawStreamUrl = data['result'] ?? '';
+        if (rawStreamUrl.isEmpty && data['bitrates'] != null) {
+          final bitrates = data['bitrates'] as Map<String, dynamic>;
+          rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? bitrates['medium'] ?? '';
+        }
+
+        if (rawStreamUrl.isNotEmpty) {
+          // On Web, route through local stream proxy to bypass browser CORS on video segments
+          final finalStreamUrl = kIsWeb
+              ? '/api/stream-proxy?url=${Uri.encodeComponent(rawStreamUrl)}'
+              : rawStreamUrl;
+
           return StreamPlaybackInfo(
-            streamUrl: streamUrl,
+            streamUrl: finalStreamUrl,
             headers: {
               'User-Agent': ApiEndpoints.defaultUserAgent,
               'Cookie': 'ssotoken=${session.ssoToken}',
