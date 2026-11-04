@@ -1,15 +1,24 @@
 import 'package:flutter/foundation.dart';
 
 class ApiEndpoints {
-  // Base URLs (Automatically adapts for Native Android TV vs Web Browser Preview)
+  // Base URLs (Automatically adapts for Native Android TV vs Web Browser Preview vs Subpath Hosting)
+  static String get webSubpathPrefix {
+    if (!kIsWeb) return '';
+    try {
+      final path = Uri.base.path.toLowerCase();
+      if (path.contains('/prismtv')) return '/prismTV';
+    } catch (_) {}
+    return '';
+  }
+
   static String get _apiBase =>
-      kIsWeb ? '/api/proxy' : 'https://jiotvapi.media.jio.com';
+      kIsWeb ? '$webSubpathPrefix/api/proxy' : 'https://jiotvapi.media.jio.com';
 
   // Authentication & SSO
   static String get sendOtpUrl => '$_apiBase/userservice/apis/v1/loginotp/send';
   static String get verifyOtpUrl => '$_apiBase/userservice/apis/v1/loginotp/verify';
   static String get refreshOtpUrl =>
-      kIsWeb ? '/api/proxy/apis/v2.0/loginotp/refresh?langId=6' : 'https://tv.media.jio.com/apis/v2.0/loginotp/refresh?langId=6';
+      kIsWeb ? '$webSubpathPrefix/api/proxy/apis/v2.0/loginotp/refresh?langId=6' : 'https://tv.media.jio.com/apis/v2.0/loginotp/refresh?langId=6';
 
   // Catalog & Channels (Public CDN with open CORS)
   static const String channelListUrl =

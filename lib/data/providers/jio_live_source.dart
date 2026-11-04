@@ -318,8 +318,12 @@ class JioLiveSource implements ILiveTvSource {
               .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
               .join('&');
 
+          final streamProxyEndpoint = ApiEndpoints.webSubpathPrefix.isNotEmpty
+              ? '${ApiEndpoints.webSubpathPrefix}/api/stream-proxy'
+              : '/api/stream-proxy';
+
           final finalStreamUrl = kIsWeb
-              ? '/api/stream-proxy?$queryString'
+              ? '$streamProxyEndpoint?$queryString'
               : rawStreamUrl;
 
           return StreamPlaybackInfo(

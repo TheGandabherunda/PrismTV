@@ -68,6 +68,20 @@ function updateSession(updates) {
 loadSession();
 
 const server = http.createServer((req, res) => {
+  // 0. Support both root deployment (/) and subpath deployment (/prismTV/)
+  let rawUrl = req.url;
+  let urlPrefix = '';
+  if (rawUrl.toLowerCase().startsWith('/prismtv/')) {
+    urlPrefix = rawUrl.substring(0, '/prismtv'.length);
+    req.url = rawUrl.substring('/prismtv'.length);
+    if (!req.url.startsWith('/')) req.url = '/' + req.url;
+  } else if (rawUrl.toLowerCase() === '/prismtv') {
+    urlPrefix = rawUrl;
+    req.url = '/';
+  }
+
+  const streamProxyPath = urlPrefix ? `${urlPrefix}/api/stream-proxy` : '/api/stream-proxy';
+
   // 1. Handle CORS Preflight for all endpoints
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
@@ -191,7 +205,7 @@ const server = http.createServer((req, res) => {
         // Check for redirect (302/301)
         if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
           const redirectUrl = new URL(proxyRes.headers.location, targetUrl).toString();
-          let proxyLocation = `/api/stream-proxy?url=${encodeURIComponent(redirectUrl)}`;
+          let proxyLocation = `${streamProxyPath}?url=${encodeURIComponent(redirectUrl)}`;
           if (activeSso) proxyLocation += `&ssotoken=${encodeURIComponent(activeSso)}`;
           if (activeAccess) proxyLocation += `&accesstoken=${encodeURIComponent(activeAccess)}`;
           if (activeCrm) proxyLocation += `&crmid=${encodeURIComponent(activeCrm)}`;
@@ -231,7 +245,7 @@ const server = http.createServer((req, res) => {
                       fullUri += parentSearch;
                     }
 
-                    let proxyUri = `/api/stream-proxy?url=${encodeURIComponent(fullUri)}`;
+                    let proxyUri = `${streamProxyPath}?url=${encodeURIComponent(fullUri)}`;
                     if (activeSso) proxyUri += `&ssotoken=${encodeURIComponent(activeSso)}`;
                     if (activeAccess) proxyUri += `&accesstoken=${encodeURIComponent(activeAccess)}`;
                     if (activeCrm) proxyUri += `&crmid=${encodeURIComponent(activeCrm)}`;
@@ -255,7 +269,7 @@ const server = http.createServer((req, res) => {
                 fullSegmentUrl += parentSearch;
               }
 
-              let proxySegment = `/api/stream-proxy?url=${encodeURIComponent(fullSegmentUrl)}`;
+              let proxySegment = `${streamProxyPath}?url=${encodeURIComponent(fullSegmentUrl)}`;
               if (activeSso) proxySegment += `&ssotoken=${encodeURIComponent(activeSso)}`;
               if (activeChannelId) proxySegment += `&channel_id=${encodeURIComponent(activeChannelId)}`;
 

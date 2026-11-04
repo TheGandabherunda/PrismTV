@@ -2,6 +2,18 @@
 <html>
 <head>
   <base href="$FLUTTER_BASE_HREF">
+  <script>
+    (function() {
+      // Dynamically resolve base href so it works both at root (/) and under subpath (/prismTV/)
+      var path = window.location.pathname;
+      var base = document.querySelector('base');
+      if (path.toLowerCase().indexOf('/prismtv') === 0) {
+        if (base) base.setAttribute('href', '/prismTV/');
+      } else if (base && base.getAttribute('href') === '$FLUTTER_BASE_HREF') {
+        base.setAttribute('href', '/');
+      }
+    })();
+  </script>
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
