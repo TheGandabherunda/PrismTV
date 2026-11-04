@@ -1,0 +1,9 @@
+services:
+  prismtv:
+    build: .
+    container_name: prismtv
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
