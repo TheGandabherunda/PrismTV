@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../storage/hive_service.dart';
 
 class ApiEndpoints {
   // Base URLs (Automatically adapts for Native Android TV vs Web Browser Preview vs Subpath Hosting)
@@ -11,14 +12,38 @@ class ApiEndpoints {
     return '';
   }
 
-  static String get _apiBase =>
-      kIsWeb ? '$webSubpathPrefix/api/proxy' : 'https://jiotvapi.media.jio.com';
+  static String get proxyHost {
+    if (!kIsWeb) return '';
+    try {
+      final custom = HiveService.getCustomProxyUrl();
+      if (custom != null && custom.trim().isNotEmpty) {
+        return custom.trim().replaceAll(RegExp(r'/+$'), '');
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  static String get _apiBase {
+    if (!kIsWeb) return 'https://jiotvapi.media.jio.com';
+    if (proxyHost.isNotEmpty) return '$proxyHost/api/proxy';
+    return '$webSubpathPrefix/api/proxy';
+  }
+
+  static String get streamProxyUrl {
+    if (proxyHost.isNotEmpty) return '$proxyHost/api/stream-proxy';
+    return webSubpathPrefix.isNotEmpty
+        ? '$webSubpathPrefix/api/stream-proxy'
+        : '/api/stream-proxy';
+  }
 
   // Authentication & SSO
   static String get sendOtpUrl => '$_apiBase/userservice/apis/v1/loginotp/send';
   static String get verifyOtpUrl => '$_apiBase/userservice/apis/v1/loginotp/verify';
-  static String get refreshOtpUrl =>
-      kIsWeb ? '$webSubpathPrefix/api/proxy/apis/v2.0/loginotp/refresh?langId=6' : 'https://tv.media.jio.com/apis/v2.0/loginotp/refresh?langId=6';
+  static String get refreshOtpUrl {
+    if (!kIsWeb) return 'https://tv.media.jio.com/apis/v2.0/loginotp/refresh?langId=6';
+    if (proxyHost.isNotEmpty) return '$proxyHost/api/proxy/apis/v2.0/loginotp/refresh?langId=6';
+    return '$webSubpathPrefix/api/proxy/apis/v2.0/loginotp/refresh?langId=6';
+  }
 
   // Catalog & Channels (Public CDN with open CORS)
   static const String channelListUrl =

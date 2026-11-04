@@ -1,5 +1,6 @@
-package com.thegandabherunda.prism_tv
+package org.thegandabherunda.prismtv
 
 import io.flutter.embedding.android.FlutterActivity
 
 class MainActivity : FlutterActivity()
+

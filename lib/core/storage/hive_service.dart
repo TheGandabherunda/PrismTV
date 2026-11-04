@@ -71,5 +71,19 @@ class HiveService {
     final box = Hive.box(settingsBoxName);
     await box.put('preferred_quality', quality);
   }
+
+  static String? getCustomProxyUrl() {
+    final box = Hive.box(settingsBoxName);
+    return box.get('custom_proxy_url') as String?;
+  }
+
+  static Future<void> setCustomProxyUrl(String? url) async {
+    final box = Hive.box(settingsBoxName);
+    if (url == null || url.trim().isEmpty) {
+      await box.delete('custom_proxy_url');
+    } else {
+      await box.put('custom_proxy_url', url.trim());
+    }
+  }
 }
 
