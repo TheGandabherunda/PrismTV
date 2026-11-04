@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/storage/hive_service.dart';
 import '../../data/models/category_model.dart';
 import '../../data/models/channel_model.dart';
 import '../../data/models/epg_program_model.dart';
 import '../../data/models/language_model.dart';
+import '../../data/models/quality_option.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/channel_repository.dart';
 import '../../routes/app_routes.dart';
+import '../player/widgets/resolution_dialog.dart';
 
 class HomeController extends GetxController {
   final ChannelRepository _channelRepo = Get.find<ChannelRepository>();
@@ -33,11 +36,15 @@ class HomeController extends GetxController {
   final RxBool isLoadingEpg = false.obs;
   final RxBool isAuthenticated = false.obs;
 
+  // Stream Resolution Settings (defaults to Auto)
+  final Rx<QualityOption> defaultQuality = QualityOption.defaultOptions.first.obs;
+
   @override
   void onInit() {
     super.onInit();
     selectedLanguage = languages.first.obs; // Defaults to All Languages
     selectedCategory = categories.first.obs; // Defaults to All Channels
+    defaultQuality.value = HiveService.getPreferredQualityOption();
     isAuthenticated.value = _authRepo.isAuthenticated;
 
     if (!isAuthenticated.value) {
@@ -189,6 +196,23 @@ class HomeController extends GetxController {
     _filterChannels();
   }
 
+  Future<void> setDefaultQuality(QualityOption option) async {
+    defaultQuality.value = option;
+    await HiveService.setPreferredQualityOption(option);
+  }
+
+  void showDefaultQualityPicker() {
+    Get.dialog(
+      ResolutionDialog(
+        currentOption: defaultQuality.value,
+        onSelect: (opt) => setDefaultQuality(opt),
+        title: 'DEFAULT STREAM RESOLUTION',
+        subtitle: 'New streams will default to this resolution',
+      ),
+      barrierColor: const Color(0x99000000),
+    );
+  }
+
   void playChannel(ChannelModel channel) {
     if (!_authRepo.isAuthenticated) {
       Get.toNamed(AppRoutes.auth);
@@ -199,6 +223,7 @@ class HomeController extends GetxController {
       arguments: {
         'channel': channel,
         'channelList': filteredChannels.toList(),
+        'preferredQuality': defaultQuality.value,
       },
     );
   }
@@ -220,7 +245,7 @@ class HomeController extends GetxController {
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 420),
+          constraints: const BoxConstraints(maxWidth: 440),
           padding: const EdgeInsets.all(28),
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -267,6 +292,92 @@ class HomeController extends GetxController {
                   ],
                 ),
               ),
+
+              const SizedBox(height: 14),
+
+              // Default Quality Setting Card
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceCard,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.unfocusedBorder),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.prismGradient,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.tune_rounded, size: 20, color: Colors.white),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Default Resolution',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Auto-selected on playback',
+                            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Clickable Quality Selector Pill
+                    Focus(
+                      child: Builder(
+                        builder: (ctx) {
+                          final hasFocus = Focus.of(ctx).hasFocus;
+                          return InkWell(
+                            onTap: () => showDefaultQualityPicker(),
+                            borderRadius: BorderRadius.circular(8),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: hasFocus ? AppColors.focusedBackground : AppColors.surfaceElevated,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: hasFocus ? AppColors.primary : AppColors.unfocusedBorder,
+                                  width: hasFocus ? 1.5 : 1.0,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Obx(
+                                    () => Text(
+                                      defaultQuality.value.label.split(' ')[0], // e.g. "Auto" or "1080p"
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: hasFocus ? Colors.white : AppColors.primaryLight,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.arrow_drop_down_rounded, size: 18, color: AppColors.primaryLight),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: 24),
               Row(
                 children: [

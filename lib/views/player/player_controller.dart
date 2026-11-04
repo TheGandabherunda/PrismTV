@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
 import '../../core/services/quality_bridge.dart';
+import '../../core/storage/hive_service.dart';
 import '../../data/models/channel_model.dart';
 import '../../data/models/epg_program_model.dart';
 import '../../data/models/quality_option.dart';
@@ -42,6 +43,15 @@ class PlayerController extends GetxController {
   void onInit() {
     super.onInit();
     final args = Get.arguments as Map<String, dynamic>?;
+    if (args != null && args['preferredQuality'] is QualityOption) {
+      selectedQualityOption.value = args['preferredQuality'] as QualityOption;
+    } else {
+      selectedQualityOption.value = HiveService.getPreferredQualityOption();
+    }
+    selectedQuality.value = selectedQualityOption.value.id == 'auto'
+        ? 'Auto'
+        : '${selectedQualityOption.value.targetHeight}p';
+
     if (args != null) {
       currentChannel = args['channel'] as ChannelModel;
       channelList = (args['channelList'] as List<ChannelModel>?) ?? [currentChannel];
@@ -165,7 +175,12 @@ class PlayerController extends GetxController {
 
   void openQualitySelector() {
     Get.dialog(
-      ResolutionDialog(controller: this),
+      ResolutionDialog(
+        currentOption: selectedQualityOption.value,
+        onSelect: (opt) => changeQuality(opt),
+        title: 'STREAM RESOLUTION',
+        subtitle: 'Select playback video quality',
+      ),
       barrierColor: const Color(0x99000000),
     );
   }

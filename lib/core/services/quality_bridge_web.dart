@@ -11,3 +11,4 @@ bool switchWebQuality(int targetHeight) {
     return false;
   }
 }
+

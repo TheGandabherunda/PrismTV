@@ -65,4 +65,12 @@ class QualityOption {
       targetHeight: 240,
     ),
   ];
+
+  static QualityOption fromId(String? id) {
+    if (id == null || id.isEmpty) return defaultOptions.first;
+    return defaultOptions.firstWhere(
+      (o) => o.id.toLowerCase() == id.toLowerCase(),
+      orElse: () => defaultOptions.first,
+    );
+  }
 }

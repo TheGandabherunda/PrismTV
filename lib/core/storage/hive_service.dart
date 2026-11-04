@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../data/models/auth_session.dart';
+import '../../data/models/quality_option.dart';
 
 class HiveService {
   static const String authBoxName = 'prism_auth_box';
@@ -62,6 +63,22 @@ class HiveService {
   }
 
   // Settings
+  static QualityOption getPreferredQualityOption() {
+    try {
+      final box = Hive.box(settingsBoxName);
+      final id = box.get('preferred_quality_id', defaultValue: 'auto') as String;
+      return QualityOption.fromId(id);
+    } catch (_) {
+      return QualityOption.defaultOptions.first;
+    }
+  }
+
+  static Future<void> setPreferredQualityOption(QualityOption option) async {
+    final box = Hive.box(settingsBoxName);
+    await box.put('preferred_quality_id', option.id);
+    await box.put('preferred_quality', option.label);
+  }
+
   static String getPreferredQuality() {
     final box = Hive.box(settingsBoxName);
     return box.get('preferred_quality', defaultValue: 'Auto');
