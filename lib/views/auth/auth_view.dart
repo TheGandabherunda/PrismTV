@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
+import '../../core/widgets/prism_triangle_logo.dart';
 import 'auth_controller.dart';
 
 class AuthView extends GetView<AuthController> {
@@ -32,24 +33,7 @@ class AuthView extends GetView<AuthController> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        width: 70,
-                        height: 70,
-                        decoration: BoxDecoration(
-                          gradient: AppColors.prismGradient,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: AppColors.primaryGlow,
-                              blurRadius: 20,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: const Center(
-                          child: Icon(Icons.live_tv_rounded, size: 40, color: Colors.white),
-                        ),
-                      ),
+                      const PrismTriangleLogo(size: 52, showBackgroundTile: true, hasGlow: true),
                       const SizedBox(height: 20),
                       ShaderMask(
                         shaderCallback: (bounds) => AppColors.prismGradient.createShader(bounds),

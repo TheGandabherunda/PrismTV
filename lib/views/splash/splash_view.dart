@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/widgets/prism_triangle_logo.dart';
 import 'splash_controller.dart';
 
 class SplashView extends GetView<SplashController> {
@@ -23,28 +24,11 @@ class SplashView extends GetView<SplashController> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Prism TV Logo Emblem
-                  Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.prismGradient,
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.4),
-                          blurRadius: 30,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.live_tv_rounded,
-                        size: 60,
-                        color: Colors.white,
-                      ),
-                    ),
+                  // Prism TV Triangle Logo Emblem
+                  const PrismTriangleLogo(
+                    size: 78,
+                    showBackgroundTile: true,
+                    hasGlow: true,
                   ),
                   const SizedBox(height: 28),
                   // Title

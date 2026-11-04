@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
+import '../../core/widgets/prism_triangle_logo.dart';
 import 'home_controller.dart';
 import 'widgets/category_pill.dart';
 import 'widgets/channel_card.dart';
@@ -67,6 +68,8 @@ class HomeView extends GetView<HomeController> {
               // Brand & Channel Count
               Row(
                 children: [
+                  const PrismTriangleLogo(size: 26, hasGlow: true),
+                  const SizedBox(width: 10),
                   ShaderMask(
                     shaderCallback: (bounds) => AppColors.prismGradient.createShader(bounds),
                     child: const Text(

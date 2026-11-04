@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/prism_triangle_logo.dart';
 
 class TvSidebarItem {
   final IconData icon;
@@ -42,25 +43,8 @@ class TvSidebar extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 20),
-          // Mini Brand Icon
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              gradient: AppColors.prismGradient,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: const [
-                BoxShadow(
-                  color: AppColors.primaryGlow,
-                  blurRadius: 12,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: const Center(
-              child: Icon(Icons.stream_rounded, size: 22, color: Colors.white),
-            ),
-          ),
+          // Mini Brand Triangle Logo
+          const PrismTriangleLogo(size: 30, hasGlow: true),
           const SizedBox(height: 32),
 
           // Nav Items

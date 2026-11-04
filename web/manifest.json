@@ -1,12 +1,12 @@
 {
-    "name": "prism_tv",
-    "short_name": "prism_tv",
+    "name": "PrismTV",
+    "short_name": "PrismTV",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#000000",
+    "theme_color": "#0D0B0D",
+    "description": "PrismTV Live Entertainment Platform by TheGandabherunda",
+    "orientation": "landscape-primary",
     "prefer_related_applications": false,
     "icons": [
         {
