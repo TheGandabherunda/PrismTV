@@ -70,6 +70,68 @@ loadSession();
 // In-memory cache for __hdnea__ tokens per channel/host
 const activeHdneaTokens = new Map();
 
+function refreshChannelHdnea(channelId, callback) {
+  if (!currentSession.ssoToken || !currentSession.accessToken) {
+    return callback(new Error('No session credentials'));
+  }
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const beginStr = '' + now.getUTCFullYear() + pad(now.getUTCMonth()+1) + pad(now.getUTCDate()) + 'T' + pad(now.getUTCHours()) + pad(now.getUTCMinutes()) + pad(now.getUTCSeconds());
+  const srnoStr = '' + now.getUTCFullYear() + pad(now.getUTCMonth()+1) + pad(now.getUTCDate());
+
+  const effectiveId = channelId === '757' ? '1370' : channelId;
+  const formBody = `channel_id=${effectiveId}&stream_type=Seek&begin=${beginStr}&srno=${srnoStr}`;
+
+  const req = https.request('https://jiotvapi.media.jio.com/playback/apis/v1.1/geturl?langId=6', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'appkey': 'NzNiMDhlYzQyNjJm',
+      'channel_id': effectiveId,
+      'crmid': currentSession.crmid,
+      'userId': currentSession.crmid,
+      'subscriberId': currentSession.crmid,
+      'uniqueId': currentSession.uniqueId,
+      'deviceId': currentSession.deviceId || '689f928e469502ab',
+      'devicetype': 'phone',
+      'isott': 'false',
+      'languageId': '6',
+      'lbcookie': '1',
+      'os': 'android',
+      'osVersion': '13',
+      'usergroup': 'tvYR7NSNn7rymo3F',
+      'User-Agent': 'okhttp/4.12.0',
+      'versionCode': '422',
+      'accessToken': currentSession.accessToken,
+      'accesstoken': currentSession.accessToken,
+      'ssoToken': currentSession.ssoToken,
+      'ssotoken': currentSession.ssoToken,
+      'Content-Length': Buffer.byteLength(formBody),
+    }
+  }, (res) => {
+    let data = '';
+    res.on('data', d => data += d);
+    res.on('end', () => {
+      try {
+        const json = JSON.parse(data);
+        const resultUrl = json.result || (json.bitrates && json.bitrates.auto) || '';
+        const match = resultUrl.match(/__hdnea__=([^&]+)/) || resultUrl.match(/hdnea=([^&]+)/);
+        if (match) {
+          const freshHdnea = match[1];
+          activeHdneaTokens.set(channelId, freshHdnea);
+          activeHdneaTokens.set(effectiveId, freshHdnea);
+          console.log(`[HDNEA REFRESH] Successfully acquired fresh token for channel ${channelId}`);
+          return callback(null, freshHdnea);
+        }
+      } catch (e) {}
+      callback(new Error('Failed to parse refresh response: ' + data));
+    });
+  });
+  req.on('error', callback);
+  req.write(formBody);
+  req.end();
+}
+
 const server = http.createServer((req, res) => {
   // 0. Support both root deployment (/) and subpath deployment (/prismTV/)
   let rawUrl = req.url;
@@ -286,8 +348,13 @@ const server = http.createServer((req, res) => {
       const activeDeviceId = currentSession.deviceId || '689f928e469502ab';
       const activeChannelId = qChannelId || '';
 
-      // Extract hdnea if present in query
-      const hdneaToken = u.searchParams.get('hdnea') || u.searchParams.get('__hdnea__') || '';
+      // Extract hdnea if present in query, enclosing URL, or channel/hostname cache
+      const hdneaToken = u.searchParams.get('hdnea') ||
+                         u.searchParams.get('__hdnea__') ||
+                         parsedUrl.searchParams.get('hdnea') ||
+                         parsedUrl.searchParams.get('__hdnea__') ||
+                         (activeChannelId ? activeHdneaTokens.get(activeChannelId) : null) ||
+                         activeHdneaTokens.get(u.hostname) || '';
       if (hdneaToken) {
         if (activeChannelId) activeHdneaTokens.set(activeChannelId, hdneaToken);
         activeHdneaTokens.set(u.hostname, hdneaToken);
@@ -356,12 +423,7 @@ const server = http.createServer((req, res) => {
         }
       }
 
-      const proxyReq = client.request(targetUrl, {
-        method: req.method,
-        headers: outgoingHeaders,
-      }, (proxyRes) => {
-        console.log(`[STREAM PROXY] ${proxyRes.statusCode} <- ${targetUrl.split('?')[0]}`);
-
+      function processStreamResponse(proxyRes, effectiveHdnea) {
         // Check for redirect (302/301)
         if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
           const redirectUrl = new URL(proxyRes.headers.location, targetUrl).toString();
@@ -370,6 +432,7 @@ const server = http.createServer((req, res) => {
           if (activeAccess) proxyLocation += `&accesstoken=${encodeURIComponent(activeAccess)}`;
           if (activeCrm) proxyLocation += `&crmid=${encodeURIComponent(activeCrm)}`;
           if (activeChannelId) proxyLocation += `&channel_id=${encodeURIComponent(activeChannelId)}`;
+          if (effectiveHdnea) proxyLocation += `&hdnea=${encodeURIComponent(effectiveHdnea)}`;
 
           res.writeHead(302, {
             'Location': proxyLocation,
@@ -389,7 +452,6 @@ const server = http.createServer((req, res) => {
           proxyRes.on('data', chunk => body += chunk);
           proxyRes.on('end', () => {
             const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
-            // Rewrite <BaseURL>dash/</BaseURL> to point to stream-proxy raw path
             const rewritten = body.replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (match, rel) => {
               const fullBase = new URL(rel, baseUrl).toString();
               const noProto = fullBase.replace(/^https?:\/\//, '');
@@ -416,19 +478,18 @@ const server = http.createServer((req, res) => {
           proxyRes.on('data', chunk => body += chunk);
           proxyRes.on('end', () => {
             const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
-            const parentSearch = u.search; // Contains ?minrate=...&__hdnea__=...
+            const parentSearch = u.search;
 
             const lines = body.split('\n');
             const rewritten = lines.map(line => {
               const trimmed = line.trim();
               if (!trimmed || trimmed.startsWith('#')) {
-                // If the line contains URI="...", rewrite that URI as well (e.g. audio/subtitle tracks, keys)
                 if (trimmed.includes('URI="')) {
                   return trimmed.replace(/URI="([^"]+)"/, (match, uri) => {
                     let fullUri = uri.startsWith('http') ? uri : new URL(uri, baseUrl).toString();
-                    if (hdneaToken && !fullUri.includes('hdnea=')) {
+                    if (effectiveHdnea && !fullUri.includes('hdnea=')) {
                       const sep = fullUri.includes('?') ? '&' : '?';
-                      fullUri += `${sep}__hdnea__=${hdneaToken}`;
+                      fullUri += `${sep}__hdnea__=${effectiveHdnea}`;
                     } else if (!fullUri.includes('?') && parentSearch) {
                       fullUri += parentSearch;
                     }
@@ -438,6 +499,7 @@ const server = http.createServer((req, res) => {
                     if (activeAccess) proxyUri += `&accesstoken=${encodeURIComponent(activeAccess)}`;
                     if (activeCrm) proxyUri += `&crmid=${encodeURIComponent(activeCrm)}`;
                     if (activeChannelId) proxyUri += `&channel_id=${encodeURIComponent(activeChannelId)}`;
+                    if (effectiveHdnea) proxyUri += `&hdnea=${encodeURIComponent(effectiveHdnea)}`;
 
                     return `URI="${proxyUri}"`;
                   });
@@ -449,10 +511,9 @@ const server = http.createServer((req, res) => {
               if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
                 fullSegmentUrl = new URL(trimmed, baseUrl).toString();
               }
-              // If segment URL has no hdnea param, attach it!
-              if (hdneaToken && !fullSegmentUrl.includes('hdnea=')) {
+              if (effectiveHdnea && !fullSegmentUrl.includes('hdnea=')) {
                 const sep = fullSegmentUrl.includes('?') ? '&' : '?';
-                fullSegmentUrl += `${sep}__hdnea__=${hdneaToken}`;
+                fullSegmentUrl += `${sep}__hdnea__=${effectiveHdnea}`;
               } else if (!fullSegmentUrl.includes('?') && parentSearch) {
                 fullSegmentUrl += parentSearch;
               }
@@ -460,6 +521,7 @@ const server = http.createServer((req, res) => {
               let proxySegment = `${streamProxyPath}?url=${encodeURIComponent(fullSegmentUrl)}`;
               if (activeSso) proxySegment += `&ssotoken=${encodeURIComponent(activeSso)}`;
               if (activeChannelId) proxySegment += `&channel_id=${encodeURIComponent(activeChannelId)}`;
+              if (effectiveHdnea) proxySegment += `&hdnea=${encodeURIComponent(effectiveHdnea)}`;
 
               return proxySegment;
             }).join('\n');
@@ -478,17 +540,53 @@ const server = http.createServer((req, res) => {
             res.writeHead(proxyRes.statusCode, respHeaders);
             res.end(rewritten);
           });
-        } else {
-          // Binary data (video segments .ts/.m4s, or AES-128 encryption key .pkey)
-          const respHeaders = {
-            ...proxyRes.headers,
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Expose-Headers': '*',
-          };
-          res.writeHead(proxyRes.statusCode, respHeaders);
-          proxyRes.pipe(res);
+          return;
         }
+
+        // Direct media streaming (.ts, .m4s, key bytes)
+        const respHeaders = {
+          ...proxyRes.headers,
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Expose-Headers': '*',
+        };
+        delete respHeaders['content-security-policy'];
+        res.writeHead(proxyRes.statusCode, respHeaders);
+        proxyRes.pipe(res);
+      }
+
+      const proxyReq = client.request(targetUrl, {
+        method: req.method,
+        headers: outgoingHeaders,
+      }, (proxyRes) => {
+        console.log(`[STREAM PROXY] ${proxyRes.statusCode} <- ${targetUrl.split('?')[0]}`);
+
+        // If 403 (token expired or missing), auto-refresh token and retry once
+        if (proxyRes.statusCode === 403 && !req._hasRetried403 && (activeChannelId || targetUrl.includes('Colors_Kannada'))) {
+          req._hasRetried403 = true;
+          const targetChannelId = activeChannelId || '757';
+          console.warn(`[STREAM PROXY] 403 encountered for ${targetUrl.split('?')[0]}. Auto-refreshing token for channel ${targetChannelId}...`);
+          return refreshChannelHdnea(targetChannelId, (refreshErr, freshHdnea) => {
+            if (refreshErr || !freshHdnea) {
+              return processStreamResponse(proxyRes, hdneaToken);
+            }
+            outgoingHeaders['Cookie'] = `__hdnea__=${freshHdnea}`;
+            const retryReq = client.request(targetUrl, {
+              method: req.method,
+              headers: outgoingHeaders,
+            }, (retryRes) => {
+              console.log(`[STREAM PROXY RETRY] ${retryRes.statusCode} <- ${targetUrl.split('?')[0]}`);
+              processStreamResponse(retryRes, freshHdnea);
+            });
+            retryReq.on('error', (err) => {
+              res.writeHead(502, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
+              res.end('Stream Error on Retry: ' + err.message);
+            });
+            retryReq.end();
+          });
+        }
+
+        processStreamResponse(proxyRes, hdneaToken);
       });
 
       proxyReq.on('error', (err) => {
@@ -652,7 +750,9 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, {
       'Content-Type': contentType,
       'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
     });
     res.end(content);
   });

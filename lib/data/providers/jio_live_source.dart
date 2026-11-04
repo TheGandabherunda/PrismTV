@@ -174,8 +174,20 @@ class JioLiveSource implements ILiveTvSource {
           return model;
         }).toList();
 
-        // Remove duplicate SD alias of Colors Kannada (channel 1370) so the catalog is clean and has only 1 Colors Kannada HD
-        channels.removeWhere((c) => c.channelId == 1370);
+        // Deduplicate duplicate SD channel aliases (e.g. Colors Kannada SD, Colors SD, Colors Marathi SD, etc.)
+        final sdDuplicateIds = {1368, 1369, 1370, 1325, 1326};
+        channels.removeWhere((c) {
+          if (sdDuplicateIds.contains(c.channelId)) return true;
+          final nameLower = c.channelName.toLowerCase().trim();
+          if (nameLower.endsWith(' sd')) {
+            final baseName = nameLower.substring(0, nameLower.length - 3).trim();
+            final hasHd = channels.any((other) =>
+                other.channelId != c.channelId &&
+                other.channelName.toLowerCase().trim() == '$baseName hd');
+            if (hasHd) return true;
+          }
+          return false;
+        });
 
         // Sort: Favorites first, then Kannada channels, then others
         channels.sort((a, b) {
@@ -328,6 +340,7 @@ class JioLiveSource implements ILiveTvSource {
             'crmid': session.crmid,
             'uniqueid': session.uniqueId,
             'channel_id': effectiveChannelId.toString(),
+            if (hdnea.isNotEmpty) 'hdnea': hdnea,
           };
           final queryString = queryParams.entries
               .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')

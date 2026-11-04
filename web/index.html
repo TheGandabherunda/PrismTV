@@ -3,6 +3,25 @@
 <head>
   <base href="$FLUTTER_BASE_HREF">
   <script>
+    // Immediate Cache-Buster & Service Worker Purge (Ensures fresh builds always load without stale cache)
+    (function() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (var i = 0; i < registrations.length; i++) {
+            registrations[i].unregister();
+          }
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          for (var i = 0; i < names.length; i++) {
+            caches.delete(names[i]);
+          }
+        });
+      }
+    })();
+  </script>
+  <script>
     (function() {
       // Dynamically resolve base href so it works both at root (/) and under subpath (/prismTV/)
       var path = window.location.pathname;
@@ -123,6 +142,18 @@
               console.log('[PrismTV] Shaka manifest parsed. Tracks:', (player.getVariantTracks() || []).map(function(t) { return t.height + 'p'; }));
               if (window.prismPreferredQualityHeight && window.prismPreferredQualityHeight > 0) {
                 window.prismSetQuality(window.prismPreferredQualityHeight);
+              } else {
+                var tracks = player.getVariantTracks() || [];
+                var highestTrack = null;
+                for (var i = 0; i < tracks.length; i++) {
+                  if (!highestTrack || (tracks[i].height || 0) > (highestTrack.height || 0)) {
+                    highestTrack = tracks[i];
+                  }
+                }
+                if (highestTrack) {
+                  player.selectVariantTrack(highestTrack, true);
+                  console.log('[PrismTV Shaka] Selected highest variant automatically: ' + highestTrack.height + 'p');
+                }
               }
               video.play().catch(function(e) {
                 console.log('[PrismTV] Autoplay notice:', e);
@@ -160,6 +191,15 @@
               
               if (window.prismPreferredQualityHeight && window.prismPreferredQualityHeight > 0) {
                 window.prismSetQuality(window.prismPreferredQualityHeight);
+              } else if (hls.levels && hls.levels.length > 0) {
+                var maxIdx = 0;
+                for (var i = 1; i < hls.levels.length; i++) {
+                  if ((hls.levels[i].height || 0) > (hls.levels[maxIdx].height || 0)) {
+                    maxIdx = i;
+                  }
+                }
+                hls.currentLevel = maxIdx;
+                console.log('[PrismTV] Selected highest level automatically: Level', maxIdx, '(' + (hls.levels[maxIdx].height || 'HD') + 'p)');
               }
 
               video.play().catch(function(e) {
@@ -277,6 +317,6 @@
   </style>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="flutter_bootstrap.js?v=20261104-1080p" async></script>
 </body>
 </html>
