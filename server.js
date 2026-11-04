@@ -165,6 +165,7 @@ const server = http.createServer((req, res) => {
           outgoingHeaders['Cookie'] = cookies.join('; ');
         }
       } else {
+        // Media playlists (.m3u8) and video segments (.ts/.m4s) from CDN
         outgoingHeaders['User-Agent'] = 'plaYtv/7.1.8 (Linux;Android 8.1.0) ExoPlayerLib/2.11.7';
         outgoingHeaders['Accept'] = '*/*';
         outgoingHeaders['Connection'] = 'keep-alive';
@@ -173,17 +174,11 @@ const server = http.createServer((req, res) => {
           outgoingHeaders['Range'] = req.headers['range'];
         }
 
-        const cookies = [];
+        // Broadpeak / Akamai CDN only validates __hdnea__
         if (hdneaToken) {
-          cookies.push(`__hdnea__=${hdneaToken}`);
+          outgoingHeaders['Cookie'] = `__hdnea__=${hdneaToken}`;
         } else if (req.headers['cookie']) {
-          cookies.push(req.headers['cookie']);
-        }
-        if (activeSso && !cookies.some(c => c.includes('ssotoken='))) {
-          cookies.push(`ssotoken=${activeSso}`);
-        }
-        if (cookies.length > 0) {
-          outgoingHeaders['Cookie'] = cookies.join('; ');
+          outgoingHeaders['Cookie'] = req.headers['cookie'];
         }
       }
 
