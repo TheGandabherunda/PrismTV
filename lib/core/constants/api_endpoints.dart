@@ -8,7 +8,8 @@ class ApiEndpoints {
   // Authentication & SSO
   static String get sendOtpUrl => '$_apiBase/userservice/apis/v1/loginotp/send';
   static String get verifyOtpUrl => '$_apiBase/userservice/apis/v1/loginotp/verify';
-  static String get refreshOtpUrl => '$_apiBase/userservice/apis/v1/loginotp/refresh?langId=6';
+  static String get refreshOtpUrl =>
+      kIsWeb ? '/api/proxy/apis/v2.0/loginotp/refresh?langId=6' : 'https://tv.media.jio.com/apis/v2.0/loginotp/refresh?langId=6';
 
   // Catalog & Channels (Public CDN with open CORS)
   static const String channelListUrl =
@@ -23,7 +24,7 @@ class ApiEndpoints {
   static String get playbackBaseUrl => '$_apiBase/playback/apis/v1.1/geturl?langId=6';
 
   // Default Headers & Signatures
-  static const String appKey = 'NzNiMDhlYzQ5NWJk';
+  static const String appKey = 'NzNiMDhlYzQyNjJm';
   static const String appName = 'RJIL_JioTV';
   static const String defaultUserAgent =
       'plaYtv/7.0.8 (Linux;Android 11) ExoPlayerLib/2.11.7';

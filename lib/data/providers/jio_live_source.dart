@@ -111,13 +111,16 @@ class JioLiveSource implements ILiveTvSource {
   /// Refreshes the existing session SSO token
   Future<AuthSession?> refreshSession(AuthSession currentSession) async {
     try {
-      final response = await http.post(
+      final response = await http.get(
         Uri.parse(ApiEndpoints.refreshOtpUrl),
         headers: {
-          'accesstoken': currentSession.ssoToken,
-          'uniqueId': currentSession.uniqueId,
+          'ssoToken': currentSession.ssoToken,
+          'ssotoken': currentSession.ssoToken,
+          'uniqueid': currentSession.uniqueId,
+          'deviceid': '689f928e469502ab',
           'devicetype': 'phone',
           'os': 'android',
+          'versionCode': '422',
           'User-Agent': 'okhttp/4.12.0',
         },
       );
@@ -302,15 +305,32 @@ class JioLiveSource implements ILiveTvSource {
             rawStreamUrl = '$rawStreamUrl${sep}hdnea=$hdnea';
           }
 
-          // On Web, route through local stream proxy to bypass browser CORS on video segments
+          // On Web, route through local stream proxy to bypass browser CORS and deliver authentication
+          final queryParams = <String, String>{
+            'url': rawStreamUrl,
+            'ssotoken': session.ssoToken,
+            'accesstoken': session.accessToken,
+            'crmid': session.crmid,
+            'uniqueid': session.uniqueId,
+            'channel_id': channel.channelId.toString(),
+          };
+          final queryString = queryParams.entries
+              .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+              .join('&');
+
           final finalStreamUrl = kIsWeb
-              ? '/api/stream-proxy?url=${Uri.encodeComponent(rawStreamUrl)}'
+              ? '/api/stream-proxy?$queryString'
               : rawStreamUrl;
 
           return StreamPlaybackInfo(
             streamUrl: finalStreamUrl,
             headers: {
               'User-Agent': 'plaYtv/7.1.8 (Linux;Android 8.1.0) ExoPlayerLib/2.11.7',
+              'appkey': 'NzNiMDhlYzQyNjJm',
+              'ssotoken': session.ssoToken,
+              'accesstoken': session.accessToken,
+              'crmid': session.crmid,
+              'channelId': channel.channelId.toString(),
               'Cookie': 'ssotoken=${session.ssoToken}${hdnea.isNotEmpty ? '; __hdnea__=$hdnea' : ''}',
             },
             isHls: true,

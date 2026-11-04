@@ -25,6 +25,48 @@ const MIME_TYPES = {
   '.woff2': 'font/woff2',
 };
 
+// ---------------------------------------------------------------------------
+// In-Memory & Persistent Session Cache
+// ---------------------------------------------------------------------------
+const SESSION_CACHE_FILE = path.join(__dirname, '.session_cache.json');
+let currentSession = {
+  accessToken: '',
+  ssoToken: '',
+  crmid: '',
+  uniqueId: '',
+  deviceId: '689f928e469502ab',
+};
+
+function loadSession() {
+  try {
+    if (fs.existsSync(SESSION_CACHE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(SESSION_CACHE_FILE, 'utf8'));
+      currentSession = { ...currentSession, ...data };
+      console.log('[SESSION] Loaded saved session for subscriber:', currentSession.crmid || 'Known');
+    }
+  } catch (e) {
+    console.error('[SESSION] Failed to load session cache:', e.message);
+  }
+}
+
+function updateSession(updates) {
+  let changed = false;
+  for (const [k, v] of Object.entries(updates)) {
+    if (v && typeof v === 'string' && v.trim().length > 0 && currentSession[k] !== v.trim()) {
+      currentSession[k] = v.trim();
+      changed = true;
+    }
+  }
+  if (changed) {
+    try {
+      fs.writeFileSync(SESSION_CACHE_FILE, JSON.stringify(currentSession, null, 2), 'utf8');
+      console.log('[SESSION] Cache updated. SSOToken present:', !!currentSession.ssoToken, 'CRM:', currentSession.crmid);
+    } catch (_) {}
+  }
+}
+
+loadSession();
+
 const server = http.createServer((req, res) => {
   // 1. Handle CORS Preflight for all endpoints
   if (req.method === 'OPTIONS') {
@@ -37,7 +79,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 2. Stream Proxy (Rewrites HLS Playlists and Proxies Video Chunks)
+  // 2. Stream Proxy (Rewrites HLS Playlists and Proxies Video Chunks & Decryption Keys)
   if (req.url.startsWith('/api/stream-proxy')) {
     const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const targetUrl = parsedUrl.searchParams.get('url');
@@ -48,6 +90,20 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // Capture query tokens if passed
+    const qSso = parsedUrl.searchParams.get('ssotoken') || '';
+    const qAccess = parsedUrl.searchParams.get('accesstoken') || '';
+    const qCrm = parsedUrl.searchParams.get('crmid') || '';
+    const qUnique = parsedUrl.searchParams.get('uniqueid') || '';
+    const qChannelId = parsedUrl.searchParams.get('channel_id') || '';
+
+    updateSession({
+      ssoToken: qSso,
+      accessToken: qAccess,
+      crmid: qCrm,
+      uniqueId: qUnique,
+    });
+
     try {
       const u = new URL(targetUrl);
       const isHttps = u.protocol === 'https:';
@@ -56,20 +112,79 @@ const server = http.createServer((req, res) => {
       // Extract hdnea if present in query
       const hdneaToken = u.searchParams.get('hdnea') || u.searchParams.get('__hdnea__') || '';
 
-      const outgoingHeaders = {
-        'User-Agent': 'plaYtv/7.1.8 (Linux;Android 8.1.0) ExoPlayerLib/2.11.7',
-        'Accept': '*/*',
-        'Connection': 'keep-alive',
-      };
+      const activeSso = qSso || currentSession.ssoToken;
+      const activeAccess = qAccess || currentSession.accessToken;
+      const activeCrm = qCrm || currentSession.crmid;
+      const activeUnique = qUnique || currentSession.uniqueId;
+      const activeDeviceId = currentSession.deviceId || '689f928e469502ab';
+      const activeChannelId = qChannelId || '';
 
-      if (req.headers['range']) {
-        outgoingHeaders['Range'] = req.headers['range'];
-      }
+      const isKeyRequest = u.hostname === 'tv.media.jio.com' ||
+                           targetUrl.includes('.key') ||
+                           targetUrl.includes('.pkey') ||
+                           targetUrl.includes('hls/aes128');
 
-      if (hdneaToken) {
-        outgoingHeaders['Cookie'] = `__hdnea__=${hdneaToken}`;
-      } else if (req.headers['cookie']) {
-        outgoingHeaders['Cookie'] = req.headers['cookie'];
+      const outgoingHeaders = {};
+
+      if (isKeyRequest) {
+        // Upstream Jio key endpoint requires strict Android app headers and rejects browser headers
+        outgoingHeaders['User-Agent'] = 'plaYtv/7.1.8 (Linux;Android 8.1.0) ExoPlayerLib/2.11.7';
+        outgoingHeaders['appkey'] = 'NzNiMDhlYzQyNjJm';
+        if (activeSso) outgoingHeaders['ssotoken'] = activeSso;
+        if (activeAccess) {
+          outgoingHeaders['accesstoken'] = activeAccess;
+          outgoingHeaders['accessToken'] = activeAccess;
+        }
+        if (activeChannelId) outgoingHeaders['channelId'] = activeChannelId;
+        if (activeCrm) {
+          outgoingHeaders['crmid'] = activeCrm;
+          outgoingHeaders['userId'] = activeCrm;
+          outgoingHeaders['subscriberId'] = activeCrm;
+        }
+        if (activeUnique) outgoingHeaders['uniqueId'] = activeUnique;
+        outgoingHeaders['deviceId'] = activeDeviceId;
+        outgoingHeaders['devicetype'] = 'phone';
+        outgoingHeaders['isott'] = 'false';
+        outgoingHeaders['languageId'] = '6';
+        outgoingHeaders['lbcookie'] = '1';
+        outgoingHeaders['os'] = 'android';
+        outgoingHeaders['osVersion'] = '13';
+        outgoingHeaders['srno'] = '230203144000';
+        outgoingHeaders['usergroup'] = 'tvYR7NSNn7rymo3F';
+        outgoingHeaders['versionCode'] = '422';
+
+        const cookies = [];
+        if (activeSso) cookies.push(`ssotoken=${activeSso}`);
+        if (hdneaToken) cookies.push(`__hdnea__=${hdneaToken}`);
+        for (const [k, v] of u.searchParams.entries()) {
+          if (k !== 'ssotoken' && k !== '__hdnea__' && k !== 'hdnea') {
+            cookies.push(`${k}=${v}`);
+          }
+        }
+        if (cookies.length > 0) {
+          outgoingHeaders['Cookie'] = cookies.join('; ');
+        }
+      } else {
+        outgoingHeaders['User-Agent'] = 'plaYtv/7.1.8 (Linux;Android 8.1.0) ExoPlayerLib/2.11.7';
+        outgoingHeaders['Accept'] = '*/*';
+        outgoingHeaders['Connection'] = 'keep-alive';
+
+        if (req.headers['range']) {
+          outgoingHeaders['Range'] = req.headers['range'];
+        }
+
+        const cookies = [];
+        if (hdneaToken) {
+          cookies.push(`__hdnea__=${hdneaToken}`);
+        } else if (req.headers['cookie']) {
+          cookies.push(req.headers['cookie']);
+        }
+        if (activeSso && !cookies.some(c => c.includes('ssotoken='))) {
+          cookies.push(`ssotoken=${activeSso}`);
+        }
+        if (cookies.length > 0) {
+          outgoingHeaders['Cookie'] = cookies.join('; ');
+        }
       }
 
       const proxyReq = client.request(targetUrl, {
@@ -81,8 +196,14 @@ const server = http.createServer((req, res) => {
         // Check for redirect (302/301)
         if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
           const redirectUrl = new URL(proxyRes.headers.location, targetUrl).toString();
+          let proxyLocation = `/api/stream-proxy?url=${encodeURIComponent(redirectUrl)}`;
+          if (activeSso) proxyLocation += `&ssotoken=${encodeURIComponent(activeSso)}`;
+          if (activeAccess) proxyLocation += `&accesstoken=${encodeURIComponent(activeAccess)}`;
+          if (activeCrm) proxyLocation += `&crmid=${encodeURIComponent(activeCrm)}`;
+          if (activeChannelId) proxyLocation += `&channel_id=${encodeURIComponent(activeChannelId)}`;
+
           res.writeHead(302, {
-            'Location': `/api/stream-proxy?url=${encodeURIComponent(redirectUrl)}`,
+            'Location': proxyLocation,
             'Access-Control-Allow-Origin': '*',
           });
           res.end();
@@ -114,7 +235,14 @@ const server = http.createServer((req, res) => {
                     } else if (!fullUri.includes('?') && parentSearch) {
                       fullUri += parentSearch;
                     }
-                    return `URI="/api/stream-proxy?url=${encodeURIComponent(fullUri)}"`;
+
+                    let proxyUri = `/api/stream-proxy?url=${encodeURIComponent(fullUri)}`;
+                    if (activeSso) proxyUri += `&ssotoken=${encodeURIComponent(activeSso)}`;
+                    if (activeAccess) proxyUri += `&accesstoken=${encodeURIComponent(activeAccess)}`;
+                    if (activeCrm) proxyUri += `&crmid=${encodeURIComponent(activeCrm)}`;
+                    if (activeChannelId) proxyUri += `&channel_id=${encodeURIComponent(activeChannelId)}`;
+
+                    return `URI="${proxyUri}"`;
                   });
                 }
                 return line;
@@ -132,7 +260,11 @@ const server = http.createServer((req, res) => {
                 fullSegmentUrl += parentSearch;
               }
 
-              return `/api/stream-proxy?url=${encodeURIComponent(fullSegmentUrl)}`;
+              let proxySegment = `/api/stream-proxy?url=${encodeURIComponent(fullSegmentUrl)}`;
+              if (activeSso) proxySegment += `&ssotoken=${encodeURIComponent(activeSso)}`;
+              if (activeChannelId) proxySegment += `&channel_id=${encodeURIComponent(activeChannelId)}`;
+
+              return proxySegment;
             }).join('\n');
 
             const respHeaders = {
@@ -150,7 +282,7 @@ const server = http.createServer((req, res) => {
             res.end(rewritten);
           });
         } else {
-          // Binary video segments (.ts, .m4s)
+          // Binary data (video segments .ts/.m4s, or AES-128 encryption key .pkey)
           const respHeaders = {
             ...proxyRes.headers,
             'Access-Control-Allow-Origin': '*',
@@ -177,10 +309,19 @@ const server = http.createServer((req, res) => {
     }
   }
 
-  // 3. API Proxy for Jio Authentication & Playback APIs
+  // 3. API Proxy for Authentication & Playback APIs
   if (req.url.startsWith('/api/proxy/')) {
     const targetPath = req.url.replace('/api/proxy', '');
-    console.log(`[API PROXY] ${req.method} -> https://jiotvapi.media.jio.com${targetPath}`);
+
+    // Select domain based on upstream service architecture
+    let upstreamHost = 'jiotvapi.media.jio.com';
+    if (targetPath.startsWith('/apis/v2.0/')) {
+      upstreamHost = 'tv.media.jio.com';
+    } else if (targetPath.startsWith('/tokenservice/')) {
+      upstreamHost = 'auth.media.jio.com';
+    }
+
+    console.log(`[API PROXY] ${req.method} -> https://${upstreamHost}${targetPath}`);
 
     const chunks = [];
     req.on('data', chunk => chunks.push(chunk));
@@ -194,30 +335,37 @@ const server = http.createServer((req, res) => {
       delete proxyHeaders['connection'];
       delete proxyHeaders['content-length'];
 
-      // Always enforce Jio expected headers
-      proxyHeaders['host'] = 'jiotvapi.media.jio.com';
+      proxyHeaders['host'] = upstreamHost;
       proxyHeaders['user-agent'] = 'okhttp/4.12.0';
 
-      // If accesstoken or accessToken header is present, ensure both casings exist
+      // Capture and ensure both casings for tokens
       const token = proxyHeaders['accesstoken'] || proxyHeaders['accesstoken'];
       if (token) {
         proxyHeaders['accesstoken'] = token;
         proxyHeaders['accessToken'] = token;
       }
 
-      // If ssotoken or ssoToken header is present, ensure both casings exist
       const sso = proxyHeaders['ssotoken'] || proxyHeaders['ssotoken'];
       if (sso) {
         proxyHeaders['ssotoken'] = sso;
         proxyHeaders['ssoToken'] = sso;
       }
 
+      // Update in-memory session cache from request headers
+      updateSession({
+        accessToken: token,
+        ssoToken: sso,
+        crmid: proxyHeaders['crmid'] || proxyHeaders['subscriberid'] || proxyHeaders['userid'],
+        uniqueId: proxyHeaders['uniqueid'],
+        deviceId: proxyHeaders['deviceid'],
+      });
+
       if (bodyBuffer.length > 0) {
         proxyHeaders['content-length'] = bodyBuffer.length;
       }
 
       const proxyReq = https.request({
-        hostname: 'jiotvapi.media.jio.com',
+        hostname: upstreamHost,
         port: 443,
         path: targetPath,
         method: req.method,
@@ -230,6 +378,25 @@ const server = http.createServer((req, res) => {
           console.log(`[API PROXY RESP] ${proxyRes.statusCode} for ${targetPath} (Length: ${resBuffer.length})`);
           if (proxyRes.statusCode !== 200 && proxyRes.statusCode !== 204) {
             console.log(`[API PROXY ERR BODY]`, resBuffer.toString('utf8'));
+          }
+
+          // Try to capture session attributes from successful responses (e.g. login/verify, token refresh)
+          if (proxyRes.statusCode === 200) {
+            try {
+              const json = JSON.parse(resBuffer.toString('utf8'));
+              const authToken = json.authToken || json.accessToken;
+              const ssoToken = json.ssoToken;
+              const sessionAttrs = json.sessionAttributes || {};
+              const user = sessionAttrs.user || {};
+              const crm = user.subscriberId || user.crmid;
+              const unique = user.unique || user.uniqueId;
+              updateSession({
+                accessToken: authToken,
+                ssoToken: ssoToken,
+                crmid: crm,
+                uniqueId: unique,
+              });
+            } catch (_) {}
           }
 
           const responseHeaders = { ...proxyRes.headers };

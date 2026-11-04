@@ -39,6 +39,8 @@ migrate_working_dir/
 *.local
 credentials.json
 *credentials*.json
+.session_cache.json
+*.session_cache.json
 
 # Symbolication & Obfuscation
 app.*.symbols
