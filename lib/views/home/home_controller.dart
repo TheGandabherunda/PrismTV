@@ -27,6 +27,10 @@ class HomeController extends GetxController {
   void onInit() {
     super.onInit();
     selectedCategory = categories.first.obs;
+    if (!_authRepo.isAuthenticated) {
+      Future.microtask(() => Get.offAllNamed(AppRoutes.auth));
+      return;
+    }
     loadChannels();
   }
 

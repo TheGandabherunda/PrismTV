@@ -224,47 +224,46 @@ class JioLiveSource implements ILiveTvSource {
   Future<StreamPlaybackInfo> resolveStream(ChannelModel channel) async {
     final session = HiveService.getSavedSession();
 
-    if (session != null && session.ssoToken.isNotEmpty) {
-      try {
-        final response = await http.post(
-          Uri.parse(ApiEndpoints.playbackBaseUrl),
-          headers: {
-            'ssotoken': session.ssoToken,
-            'channel_id': channel.channelId.toString(),
-            'crmid': session.crmid,
-            'uniqueId': session.uniqueId,
-            'User-Agent': ApiEndpoints.defaultUserAgent,
-            'deviceType': 'phone',
-            'os': 'android',
-            'appkey': ApiEndpoints.appKey,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: 'stream_type=Live&channel_id=${channel.channelId}',
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final streamUrl = data['result'] ?? '';
-          if (streamUrl.isNotEmpty) {
-            return StreamPlaybackInfo(
-              streamUrl: streamUrl,
-              headers: {
-                'User-Agent': ApiEndpoints.defaultUserAgent,
-                'Cookie': 'ssotoken=${session.ssoToken}',
-              },
-              isHls: true,
-            );
-          }
-        }
-      } catch (_) {}
+    if (session == null || session.ssoToken.isEmpty) {
+      throw Exception('Authentication required. Please log in with your Jio number to stream live TV.');
     }
 
-    // Default test/demo stream for immediate testing & offline preview
-    return StreamPlaybackInfo(
-      streamUrl:
-          'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-      isHls: false,
-    );
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.playbackBaseUrl),
+        headers: {
+          'ssotoken': session.ssoToken,
+          'channel_id': channel.channelId.toString(),
+          'crmid': session.crmid,
+          'uniqueId': session.uniqueId,
+          'User-Agent': ApiEndpoints.defaultUserAgent,
+          'deviceType': 'phone',
+          'os': 'android',
+          'appkey': ApiEndpoints.appKey,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'stream_type=Live&channel_id=${channel.channelId}',
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final streamUrl = data['result'] ?? '';
+        if (streamUrl.isNotEmpty) {
+          return StreamPlaybackInfo(
+            streamUrl: streamUrl,
+            headers: {
+              'User-Agent': ApiEndpoints.defaultUserAgent,
+              'Cookie': 'ssotoken=${session.ssoToken}',
+            },
+            isHls: true,
+          );
+        }
+      }
+    } catch (e) {
+      throw Exception('Failed to connect to ${channel.channelName} stream: $e');
+    }
+
+    throw Exception('Stream unavailable for ${channel.channelName}. Active subscription required.');
   }
 
   List<ChannelModel> _buildSampleChannels() {

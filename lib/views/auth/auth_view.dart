@@ -11,217 +11,243 @@ class AuthView extends GetView<AuthController> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimens.tvMarginHorizontal,
-            vertical: AppDimens.tvMarginVertical,
-          ),
-          child: Row(
-            children: [
-              // Left Panel: Brand & Info
-              Expanded(
-                flex: 4,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 70,
-                      height: 70,
-                      decoration: BoxDecoration(
-                        gradient: AppColors.prismGradient,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withValues(alpha: 0.35),
-                            blurRadius: 20,
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.live_tv_rounded, size: 40, color: Colors.white),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'PRISM TV',
-                      style: TextStyle(
-                        fontSize: 34,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 3,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const Text(
-                      'Smart TV Broadcast Platform',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'Log in with your registered Jio mobile number to access all live TV channels, high-definition regional broadcasts, and real-time EPG program schedules.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.6,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: 48),
-
-              // Right Panel: Input & Remote Keypad
-              Expanded(
-                flex: 6,
-                child: Center(
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 440),
-                    padding: const EdgeInsets.all(28),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
-                      border: Border.all(color: AppColors.unfocusedBorder),
-                    ),
-                    child: Obx(
-                      () => Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            controller.isOtpSent.value ? 'Enter 6-Digit OTP' : 'Enter Jio Mobile Number',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Display Box
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceElevated,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.primaryGlow, width: 1.5),
-                            ),
-                            child: Row(
-                              children: [
-                                if (!controller.isOtpSent.value)
-                                  const Text(
-                                    '+91  ',
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.primary,
-                                    ),
-                                  ),
-                                Expanded(
-                                  child: Text(
-                                    controller.isOtpSent.value
-                                        ? (controller.otpInput.text.isEmpty
-                                            ? '------'
-                                            : controller.otpInput.text.padRight(6, '-'))
-                                        : (controller.phoneInput.text.isEmpty
-                                            ? 'XXXXXXXXXX'
-                                            : controller.phoneInput.text),
-                                    style: const TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 4,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          // TV Keypad (0-9, Del)
-                          _buildTvKeypad(),
-
-                          const SizedBox(height: 16),
-
-                          // Action Button
-                          Focus(
-                            child: Builder(
-                              builder: (ctx) {
-                                final hasFocus = Focus.of(ctx).hasFocus;
-                                return InkWell(
-                                  onTap: controller.isLoading.value
-                                      ? null
-                                      : (controller.isOtpSent.value
-                                          ? controller.verifyOtp
-                                          : controller.sendOtp),
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    decoration: BoxDecoration(
-                                      gradient: hasFocus ? AppColors.prismGradient : null,
-                                      color: hasFocus ? null : AppColors.primary,
-                                      borderRadius: BorderRadius.circular(12),
-                                      boxShadow: hasFocus
-                                          ? [
-                                              BoxShadow(
-                                                color: AppColors.primary.withValues(alpha: 0.5),
-                                                blurRadius: 16,
-                                              )
-                                            ]
-                                          : null,
-                                    ),
-                                    child: Center(
-                                      child: controller.isLoading.value
-                                          ? const SizedBox(
-                                              width: 22,
-                                              height: 22,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: Colors.white,
-                                              ),
-                                            )
-                                          : Text(
-                                              controller.isOtpSent.value
-                                                  ? 'VERIFY & START STREAMING'
-                                                  : 'REQUEST OTP',
-                                              style: const TextStyle(
-                                                color: Colors.black,
-                                                fontWeight: FontWeight.w900,
-                                                letterSpacing: 1.2,
-                                              ),
-                                            ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-
-                          if (controller.statusMessage.value.isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              controller.statusMessage.value,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: controller.isError.value ? AppColors.accent : AppColors.primary,
-                              ),
+      body: Focus(
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          controller.handleKeyEvent(event);
+          return KeyEventResult.ignored;
+        },
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppDimens.tvMarginHorizontal,
+              vertical: AppDimens.tvMarginVertical,
+            ),
+            child: Row(
+              children: [
+                // Left Panel: Brand & Info
+                Expanded(
+                  flex: 4,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 70,
+                        height: 70,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.prismGradient,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.35),
+                              blurRadius: 20,
                             ),
                           ],
+                        ),
+                        child: const Center(
+                          child: Icon(Icons.live_tv_rounded, size: 40, color: Colors.white),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'PRISM TV',
+                        style: TextStyle(
+                          fontSize: 34,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 3,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const Text(
+                        'Smart TV Broadcast Platform',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Log in with your registered Jio mobile number to access all live TV channels, high-definition regional broadcasts, and real-time EPG program schedules.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.6,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Row(
+                        children: [
+                          Icon(Icons.keyboard_rounded, size: 16, color: AppColors.primary),
+                          SizedBox(width: 8),
+                          Text(
+                            'Use TV remote keypad or physical keyboard',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 48),
+
+                // Right Panel: Input & Remote Keypad
+                Expanded(
+                  flex: 6,
+                  child: Center(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 440),
+                      padding: const EdgeInsets.all(28),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
+                        border: Border.all(color: AppColors.unfocusedBorder),
+                      ),
+                      child: Obx(
+                        () => Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              controller.isOtpSent.value ? 'Enter 6-Digit OTP' : 'Enter Jio Mobile Number',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Display Box (Reactively updates with controller.phoneNumber / otpCode)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceElevated,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.primaryGlow, width: 1.5),
+                              ),
+                              child: Row(
+                                children: [
+                                  if (!controller.isOtpSent.value)
+                                    const Text(
+                                      '+91  ',
+                                      style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  Expanded(
+                                    child: Text(
+                                      controller.isOtpSent.value
+                                          ? (controller.otpCode.value.isEmpty
+                                              ? '------'
+                                              : controller.otpCode.value.padRight(6, '-'))
+                                          : (controller.phoneNumber.value.isEmpty
+                                              ? 'XXXXXXXXXX'
+                                              : controller.phoneNumber.value),
+                                      style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 4,
+                                        color: (controller.isOtpSent.value
+                                                ? controller.otpCode.value.isNotEmpty
+                                                : controller.phoneNumber.value.isNotEmpty)
+                                            ? Colors.white
+                                            : AppColors.textMuted,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // TV Keypad (0-9, Clear, Delete)
+                            _buildTvKeypad(),
+
+                            const SizedBox(height: 16),
+
+                            // Action Button
+                            Focus(
+                              child: Builder(
+                                builder: (ctx) {
+                                  final hasFocus = Focus.of(ctx).hasFocus;
+                                  return InkWell(
+                                    onTap: controller.isLoading.value
+                                        ? null
+                                        : (controller.isOtpSent.value
+                                            ? controller.verifyOtp
+                                            : controller.sendOtp),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      decoration: BoxDecoration(
+                                        gradient: hasFocus ? AppColors.prismGradient : null,
+                                        color: hasFocus ? null : AppColors.primary,
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: hasFocus
+                                            ? [
+                                                BoxShadow(
+                                                  color: AppColors.primary.withValues(alpha: 0.5),
+                                                  blurRadius: 16,
+                                                )
+                                              ]
+                                            : null,
+                                      ),
+                                      child: Center(
+                                        child: controller.isLoading.value
+                                            ? const SizedBox(
+                                                width: 22,
+                                                height: 22,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white,
+                                                ),
+                                              )
+                                            : Text(
+                                                controller.isOtpSent.value
+                                                    ? 'VERIFY & START STREAMING'
+                                                    : 'REQUEST OTP',
+                                                style: const TextStyle(
+                                                  color: Colors.black,
+                                                  fontWeight: FontWeight.w900,
+                                                  letterSpacing: 1.2,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+
+                            if (controller.statusMessage.value.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                controller.statusMessage.value,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: controller.isError.value ? AppColors.accent : AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -263,13 +289,7 @@ class AuthView extends GetView<AuthController> {
         const SizedBox(height: 8),
         Row(
           children: [
-            _keypadActionBtn('Clear', () {
-              if (!controller.isOtpSent.value) {
-                controller.phoneInput.clear();
-              } else {
-                controller.otpInput.clear();
-              }
-            }),
+            _keypadActionBtn('Clear', () => controller.clearInput()),
             const SizedBox(width: 8),
             _keypadBtn('0'),
             const SizedBox(width: 8),
@@ -356,4 +376,3 @@ class AuthView extends GetView<AuthController> {
     );
   }
 }
-
