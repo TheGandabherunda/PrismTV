@@ -23,7 +23,7 @@ class HomeView extends GetView<HomeController> {
             () => TvSidebar(
               selectedIndex: controller.selectedSidebarIndex.value,
               onSelect: controller.selectSidebar,
-              isAuthenticated: controller.isAuthenticated,
+              isAuthenticated: controller.isAuthenticated.value,
               onAuthAction: controller.onProfileTapped,
             ),
           ),

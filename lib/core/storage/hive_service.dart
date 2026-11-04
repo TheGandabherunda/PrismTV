@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../data/models/auth_session.dart';
 
@@ -15,10 +17,18 @@ class HiveService {
 
   // Auth Operations
   static AuthSession? getSavedSession() {
-    final box = Hive.box(authBoxName);
-    final raw = box.get('current_session');
-    if (raw != null && raw is Map) {
-      return AuthSession.fromJson(Map<String, dynamic>.from(raw));
+    try {
+      final box = Hive.box(authBoxName);
+      final raw = box.get('current_session');
+      if (raw != null) {
+        if (raw is Map) {
+          return AuthSession.fromJson(Map<String, dynamic>.from(raw));
+        } else if (raw is String) {
+          return AuthSession.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        }
+      }
+    } catch (e) {
+      debugPrint('[HIVE_AUTH_ERROR] $e');
     }
     return null;
   }

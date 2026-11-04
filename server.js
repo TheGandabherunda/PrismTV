@@ -62,6 +62,10 @@ const server = http.createServer((req, res) => {
         'Connection': 'keep-alive',
       };
 
+      if (req.headers['range']) {
+        outgoingHeaders['Range'] = req.headers['range'];
+      }
+
       if (hdneaToken) {
         outgoingHeaders['Cookie'] = `__hdnea__=${hdneaToken}`;
       } else if (req.headers['cookie']) {
@@ -104,7 +108,10 @@ const server = http.createServer((req, res) => {
                 if (trimmed.includes('URI="')) {
                   return trimmed.replace(/URI="([^"]+)"/, (match, uri) => {
                     let fullUri = uri.startsWith('http') ? uri : new URL(uri, baseUrl).toString();
-                    if (!fullUri.includes('?') && parentSearch) {
+                    if (hdneaToken && !fullUri.includes('hdnea=')) {
+                      const sep = fullUri.includes('?') ? '&' : '?';
+                      fullUri += `${sep}__hdnea__=${hdneaToken}`;
+                    } else if (!fullUri.includes('?') && parentSearch) {
                       fullUri += parentSearch;
                     }
                     return `URI="/api/stream-proxy?url=${encodeURIComponent(fullUri)}"`;
@@ -117,8 +124,11 @@ const server = http.createServer((req, res) => {
               if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
                 fullSegmentUrl = new URL(trimmed, baseUrl).toString();
               }
-              // If segment URL has no query params, attach the parent playlist's query (hdnea token)
-              if (!fullSegmentUrl.includes('?') && parentSearch) {
+              // If segment URL has no hdnea param, attach it!
+              if (hdneaToken && !fullSegmentUrl.includes('hdnea=')) {
+                const sep = fullSegmentUrl.includes('?') ? '&' : '?';
+                fullSegmentUrl += `${sep}__hdnea__=${hdneaToken}`;
+              } else if (!fullSegmentUrl.includes('?') && parentSearch) {
                 fullSegmentUrl += parentSearch;
               }
 
@@ -129,6 +139,7 @@ const server = http.createServer((req, res) => {
               'Content-Type': 'application/vnd.apple.mpegurl',
               'Access-Control-Allow-Origin': '*',
               'Access-Control-Allow-Methods': 'GET, OPTIONS',
+              'Access-Control-Expose-Headers': '*',
               'Cache-Control': 'no-cache',
             };
             if (proxyRes.headers['set-cookie']) {
@@ -144,6 +155,7 @@ const server = http.createServer((req, res) => {
             ...proxyRes.headers,
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Expose-Headers': '*',
           };
           res.writeHead(proxyRes.statusCode, respHeaders);
           proxyRes.pipe(res);

@@ -8,17 +8,17 @@ void main() {
   group('PrismTV Core Models & Architecture Tests', () {
     test('ChannelModel properly parses JSON and categorizes', () {
       final json = {
-        'channel_id': 105,
+        'channel_id': 757,
         'channel_name': 'Colors Kannada HD',
         'logoUrl': 'colors_kannada.png',
-        'channelCategoryId': 1,
+        'channelCategoryId': 5,
         'channelLanguageId': 13,
         'isHD': true,
       };
 
       final channel = ChannelModel.fromJson(json);
 
-      expect(channel.channelId, 105);
+      expect(channel.channelId, 757);
       expect(channel.channelName, 'Colors Kannada HD');
       expect(channel.isHd, true);
       expect(channel.categoryName, 'Entertainment');

@@ -25,6 +25,14 @@ class AuthSession {
       (expiresAt == null || expiresAt!.isAfter(DateTime.now()));
 
   factory AuthSession.fromJson(Map<String, dynamic> json) {
+    DateTime? exp;
+    final rawExp = json['expiresAt'];
+    if (rawExp is DateTime) {
+      exp = rawExp;
+    } else if (rawExp != null) {
+      exp = DateTime.tryParse(rawExp.toString());
+    }
+
     return AuthSession(
       accessToken: json['accessToken'] ?? json['authToken'] ?? '',
       refreshToken: json['refreshToken'] ?? '',
@@ -33,7 +41,7 @@ class AuthSession {
       crmid: json['crmid'] ?? '',
       mobileNumber: json['mobileNumber'],
       subscriberId: json['subscriberId'] ?? json['crmid'],
-      expiresAt: json['expiresAt'] != null ? DateTime.parse(json['expiresAt']) : null,
+      expiresAt: exp,
     );
   }
 

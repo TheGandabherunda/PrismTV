@@ -24,12 +24,14 @@ class HomeController extends GetxController {
 
   final RxBool isLoadingChannels = true.obs;
   final RxBool isLoadingEpg = false.obs;
+  final RxBool isAuthenticated = false.obs;
 
   @override
   void onInit() {
     super.onInit();
     selectedCategory = categories.first.obs;
-    if (!_authRepo.isAuthenticated) {
+    isAuthenticated.value = _authRepo.isAuthenticated;
+    if (!isAuthenticated.value) {
       Future.microtask(() => Get.offAllNamed(AppRoutes.auth));
       return;
     }
@@ -124,10 +126,9 @@ class HomeController extends GetxController {
     );
   }
 
-  bool get isAuthenticated => _authRepo.isAuthenticated;
-
   void onProfileTapped() {
-    if (isAuthenticated) {
+    isAuthenticated.value = _authRepo.isAuthenticated;
+    if (isAuthenticated.value) {
       _showAccountDialog();
     } else {
       Get.toNamed(AppRoutes.auth);
@@ -158,12 +159,12 @@ class HomeController extends GetxController {
               ),
               const SizedBox(height: 16),
               const Text(
-                'My Jio Account',
+                'PrismTV Profile',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
               ),
               const SizedBox(height: 8),
               Text(
-                session?.mobileNumber ?? 'Connected Account',
+                session?.mobileNumber ?? 'Connected User',
                 style: const TextStyle(fontSize: 16, color: AppColors.primary, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 20),
@@ -178,7 +179,7 @@ class HomeController extends GetxController {
                   children: [
                     _infoRow('Subscriber ID', session?.crmid.isNotEmpty == true ? session!.crmid : 'Active'),
                     const Divider(color: AppColors.unfocusedBorder, height: 16),
-                    _infoRow('Service Tier', 'JioTV Broadcast Unlimited'),
+                    _infoRow('Service Tier', 'PrismTV Live Streaming'),
                     const Divider(color: AppColors.unfocusedBorder, height: 16),
                     _infoRow('Device Target', 'PrismTV Smart TV'),
                   ],
@@ -234,6 +235,7 @@ class HomeController extends GetxController {
 
   void logout() async {
     await _authRepo.logout();
+    isAuthenticated.value = false;
     Get.offAllNamed(AppRoutes.auth);
   }
 }

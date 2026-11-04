@@ -64,28 +64,30 @@ class ChannelModel {
 
   static String _resolveCategory(int id) {
     switch (id) {
-      case 1:
-        return 'Entertainment';
-      case 2:
-        return 'Movies';
-      case 3:
-        return 'Kids';
-      case 4:
-        return 'Sports';
       case 5:
-        return 'Lifestyle';
+        return 'Entertainment';
       case 6:
-        return 'Infotainment';
+        return 'Movies';
       case 7:
-        return 'News';
+        return 'Kids';
       case 8:
-        return 'Music';
+        return 'Sports';
       case 9:
-        return 'Devotional';
+        return 'Lifestyle';
       case 10:
+        return 'Infotainment';
+      case 12:
+        return 'News';
+      case 13:
+        return 'Music';
+      case 15:
+        return 'Devotional';
+      case 16:
         return 'Business';
-      case 11:
+      case 17:
         return 'Educational';
+      case 18:
+        return 'Shopping';
       default:
         return 'General';
     }
