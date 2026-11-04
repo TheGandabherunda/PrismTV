@@ -1,0 +1,24 @@
+{
+  "name": "prism-tv",
+  "version": "1.0.0",
+  "description": "PrismTV Smart TV & Live Broadcast Streaming Platform by TheGandabherunda",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "build:web": "flutter build web --release",
+    "build:apk": "flutter build apk --release",
+    "test": "flutter test",
+    "analyze": "flutter analyze"
+  },
+  "keywords": [
+    "prismtv",
+    "smart-tv",
+    "android-tv",
+    "fire-tv",
+    "gandabherunda",
+    "kannada",
+    "streaming"
+  ],
+  "author": "TheGandabherunda",
+  "license": "MIT"
+}

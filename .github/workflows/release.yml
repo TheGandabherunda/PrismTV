@@ -1,0 +1,50 @@
+name: Create Release & Distribute APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Universal Release APK
+        run: flutter build apk --release
+
+      - name: Rename APK with Tag Version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          cp build/app/outputs/flutter-apk/app-release.apk PrismTV-${VERSION}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: PrismTV ${{ github.ref_name }}
+          files: PrismTV-*.apk
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
