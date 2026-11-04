@@ -79,7 +79,7 @@ function refreshChannelHdnea(channelId, callback) {
   const beginStr = '' + now.getUTCFullYear() + pad(now.getUTCMonth()+1) + pad(now.getUTCDate()) + 'T' + pad(now.getUTCHours()) + pad(now.getUTCMinutes()) + pad(now.getUTCSeconds());
   const srnoStr = '' + now.getUTCFullYear() + pad(now.getUTCMonth()+1) + pad(now.getUTCDate());
 
-  const effectiveId = channelId === '757' ? '1370' : channelId;
+  const effectiveId = String(channelId);
   const formBody = `channel_id=${effectiveId}&stream_type=Seek&begin=${beginStr}&srno=${srnoStr}`;
 
   const req = https.request('https://jiotvapi.media.jio.com/playback/apis/v1.1/geturl?langId=6', {
@@ -114,7 +114,9 @@ function refreshChannelHdnea(channelId, callback) {
     res.on('end', () => {
       try {
         const json = JSON.parse(data);
-        const resultUrl = json.result || (json.bitrates && json.bitrates.auto) || '';
+        const resultUrl = (json.mpd && (json.mpd.result || (json.mpd.bitrates && (json.mpd.bitrates.high || json.mpd.bitrates.auto)))) ||
+                          json.result ||
+                          (json.bitrates && (json.bitrates.high || json.bitrates.auto)) || '';
         const match = resultUrl.match(/__hdnea__=([^&]+)/) || resultUrl.match(/hdnea=([^&]+)/);
         if (match) {
           const freshHdnea = match[1];

@@ -310,10 +310,15 @@ class JioLiveSource implements ILiveTvSource {
         String rawStreamUrl = '';
         String drmLicenseUrl = '';
 
-        if (mpd != null && mpd['result'] != null && (mpd['result'] as String).isNotEmpty) {
-          rawStreamUrl = mpd['result'] as String;
+        if (mpd != null) {
+          final mpdBitrates = mpd['bitrates'] as Map<String, dynamic>?;
+          // Prefer mpd.bitrates.high which contains 1080p + 720p representations (minrate=840000)
+          // while preserving all audio tracks. Fallback to mpd.result or mpd.bitrates.auto.
+          final highMpd = mpdBitrates != null ? (mpdBitrates['high'] as String? ?? mpdBitrates['auto'] as String?) : null;
+          rawStreamUrl = highMpd ?? (mpd['result'] as String?) ?? '';
           drmLicenseUrl = (mpd['key'] as String?) ?? '';
-        } else {
+        }
+        if (rawStreamUrl.isEmpty) {
           rawStreamUrl = data['result'] ?? '';
           if (rawStreamUrl.isEmpty && bitrates != null) {
             rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? '';

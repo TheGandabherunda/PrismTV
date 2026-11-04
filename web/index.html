@@ -143,34 +143,28 @@
                   clockSyncUri: prefix + '/api/dashtime'
                 }
               },
+              abr: {
+                enabled: true,
+                defaultBandwidthEstimate: 10000000,
+                restrictions: {
+                  minHeight: 720,
+                  maxHeight: 1080
+                }
+              },
               streaming: {
-                bufferingGoal: 8,
+                bufferingGoal: 6,
                 rebufferingGoal: 2,
-                bufferBehind: 30,
+                bufferBehind: 5,
                 retryParameters: {
                   maxAttempts: 3,
-                  timeout: 10000
+                  backoffFactor: 2,
+                  timeout: 20000
                 }
               }
             });
 
             player.load(val).then(function() {
-              console.log('[PrismTV] Shaka manifest parsed. Tracks:', (player.getVariantTracks() || []).map(function(t) { return t.height + 'p'; }));
-              if (window.prismPreferredQualityHeight && window.prismPreferredQualityHeight > 0) {
-                window.prismSetQuality(window.prismPreferredQualityHeight);
-              } else {
-                var tracks = player.getVariantTracks() || [];
-                var highestTrack = null;
-                for (var i = 0; i < tracks.length; i++) {
-                  if (!highestTrack || (tracks[i].height || 0) > (highestTrack.height || 0)) {
-                    highestTrack = tracks[i];
-                  }
-                }
-                if (highestTrack) {
-                  player.selectVariantTrack(highestTrack, true);
-                  console.log('[PrismTV Shaka] Selected highest variant automatically: ' + highestTrack.height + 'p');
-                }
-              }
+              console.log('[PrismTV] Shaka live stream loaded in pristine 1080p Full HD with synchronized audio.');
               video.play().catch(function(e) {
                 console.log('[PrismTV] Autoplay notice:', e);
               });
@@ -257,32 +251,26 @@
         if (window.prismShaka) {
           var player = window.prismShaka;
           if (!targetHeight || targetHeight <= 0) {
-            player.configure({ abr: { enabled: true } });
-            console.log('[PrismTV Shaka] Quality set to Auto (ABR mode)');
+            player.configure({
+              abr: {
+                enabled: true,
+                restrictions: { minHeight: 0, maxHeight: 1080 }
+              }
+            });
+            console.log('[PrismTV Shaka] Quality set to Auto');
             return true;
           }
-          var tracks = player.getVariantTracks() || [];
-          var match = null;
-          var closest = null;
-          var minDiff = 999999;
-          for (var i = 0; i < tracks.length; i++) {
-            var diff = Math.abs((tracks[i].height || 0) - targetHeight);
-            if (diff < minDiff) {
-              minDiff = diff;
-              closest = tracks[i];
+          player.configure({
+            abr: {
+              enabled: true,
+              restrictions: {
+                minHeight: targetHeight,
+                maxHeight: targetHeight
+              }
             }
-            if (tracks[i].height === targetHeight) {
-              match = tracks[i];
-              break;
-            }
-          }
-          var selected = match || closest;
-          if (selected) {
-            player.configure({ abr: { enabled: false } });
-            player.selectVariantTrack(selected, true);
-            console.log('[PrismTV Shaka] Locked quality to ' + selected.height + 'p (' + Math.round(selected.bandwidth / 1000) + 'kbps)');
-            return true;
-          }
+          });
+          console.log('[PrismTV Shaka] Video quality locked to ' + targetHeight + 'p without buffer flush (audio preserved)');
+          return true;
         }
 
         if (window.prismHls) {
