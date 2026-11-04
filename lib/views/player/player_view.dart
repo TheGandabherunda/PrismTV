@@ -26,8 +26,10 @@ class PlayerView extends GetView<PlayerController> {
                 child: Obx(() {
                   if (controller.isPlayerInitialized.value &&
                       controller.videoPlayerController != null) {
+                    final ratio = controller.videoPlayerController!.value.aspectRatio;
+                    final effectiveRatio = ratio > 0.0 ? ratio : (16 / 9);
                     return AspectRatio(
-                      aspectRatio: controller.videoPlayerController!.value.aspectRatio,
+                      aspectRatio: effectiveRatio,
                       child: VideoPlayer(controller.videoPlayerController!),
                     );
                   }

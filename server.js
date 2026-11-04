@@ -70,6 +70,42 @@ loadSession();
 // In-memory cache for __hdnea__ tokens per channel/host
 const activeHdneaTokens = new Map();
 
+// Map of Broadpeak stream slugs to channel IDs for universal token refresh across all channels
+const channelSlugToIdMap = new Map([
+  ['Colors_Kannada_HD_MOB', '757'],
+  ['CNHDKannada_MOB', '757'],
+  ['Star_Plus_HD_MOB', '1132'],
+  ['Ten_HD_MOB', '162'],
+  ['ColorsHD_MOB', '144'],
+  ['Sony_SAB_MOB', '154'],
+  ['Sony_HD_MOB', '156'],
+  ['Sony_Max_HD_MOB', '476'],
+  ['SonyTen4Kan_MOB', '3585'],
+  ['SonyTen2HD_MOB', '288'],
+  ['SonyTen3HD_MOB', '287'],
+  ['Udaya_HD_MOB', '901'],
+  ['Zee_Kannada_HD_MOB', '884'],
+  ['Zee_Cinema_HD_MOB', '474'],
+  ['Zee_TV_HD_MOB', '153'],
+  ['Star_Gold_HD_MOB', '475'],
+  ['Star_Bharat_HD_MOB', '1133'],
+  ['Star_Sports_1_HD_MOB', '283'],
+  ['Star_Sports_2_HD_MOB', '285'],
+  ['DD9_chandana_kannada_MOB', '713'],
+  ['Chintu_TV_MOB', '710'],
+  ['ColorsSuper_MOB', '759'],
+  ['Pogo_Kan_MOB', '712'],
+]);
+
+function findChannelIdFromUrl(targetUrl) {
+  if (!targetUrl) return '';
+  const match = targetUrl.match(/\/bpk-tv\/([^\/]+)\//);
+  if (match && channelSlugToIdMap.has(match[1])) {
+    return channelSlugToIdMap.get(match[1]);
+  }
+  return '';
+}
+
 function refreshChannelHdnea(channelId, callback) {
   if (!currentSession.ssoToken || !currentSession.accessToken) {
     return callback(new Error('No session credentials'));
@@ -176,7 +212,11 @@ function generateDateTime() {
   if (req.url.startsWith('/api/drm-proxy')) {
     const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const targetUrl = parsedUrl.searchParams.get('url');
-    const channelId = parsedUrl.searchParams.get('channel_id') || '757';
+    let channelId = parsedUrl.searchParams.get('channel_id') || findChannelIdFromUrl(targetUrl);
+    if (!channelId && targetUrl) {
+      const u = new URL(targetUrl);
+      channelId = u.searchParams.get('channel_id') || u.searchParams.get('channelid') || '';
+    }
 
     if (!targetUrl) {
       res.writeHead(400, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
@@ -301,7 +341,7 @@ function generateDateTime() {
       const isHttps = u.protocol === 'https:';
       const client = isHttps ? https : http;
 
-      const channelId = embeddedChannelId || (targetUrl.includes('Colors_Kannada') ? '757' : '757');
+      const channelId = embeddedChannelId || findChannelIdFromUrl(targetUrl) || (u.searchParams.get('channel_id')) || '';
       const hdneaToken = embeddedHdnea || u.searchParams.get('hdnea') || u.searchParams.get('__hdnea__') || activeHdneaTokens.get(channelId) || activeHdneaTokens.get(u.hostname) || '';
 
       const outgoingHeaders = {
@@ -402,7 +442,7 @@ function generateDateTime() {
       const activeCrm = qCrm || currentSession.crmid;
       const activeUnique = qUnique || currentSession.uniqueId;
       const activeDeviceId = currentSession.deviceId || '689f928e469502ab';
-      const activeChannelId = qChannelId || '';
+      const activeChannelId = qChannelId || findChannelIdFromUrl(targetUrl) || (u.searchParams.get('channel_id')) || '';
 
       // Extract hdnea if present in query, enclosing URL, or channel/hostname cache
       const hdneaToken = u.searchParams.get('hdnea') ||
@@ -508,14 +548,22 @@ function generateDateTime() {
           proxyRes.on('data', chunk => body += chunk);
           proxyRes.on('end', () => {
             const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
-            let rewritten = body.replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (match, rel) => {
-              const fullBase = new URL(rel, baseUrl).toString();
-              const noProto = fullBase.replace(/^https?:\/\//, '');
-              const hdneaPart = effectiveHdnea ? `hdnea/${encodeURIComponent(effectiveHdnea)}/` : '';
-              const chPart = activeChannelId ? `ch/${activeChannelId}/` : '';
-              const proxyBase = `${streamProxyPath}/raw/${hdneaPart}${chPart}${fullBase.startsWith('https') ? 'https' : 'http'}/${noProto}`;
-              return `<BaseURL>${proxyBase}</BaseURL>`;
-            });
+            const hdneaPart = effectiveHdnea ? `hdnea/${encodeURIComponent(effectiveHdnea)}/` : '';
+            const chPart = activeChannelId ? `ch/${activeChannelId}/` : '';
+
+            let rewritten = body;
+            if (rewritten.includes('<BaseURL>')) {
+              rewritten = rewritten.replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (match, rel) => {
+                const fullBase = new URL(rel, baseUrl).toString();
+                const noProto = fullBase.replace(/^https?:\/\//, '');
+                const proxyBase = `${streamProxyPath}/raw/${hdneaPart}${chPart}${fullBase.startsWith('https') ? 'https' : 'http'}/${noProto}`;
+                return `<BaseURL>${proxyBase}</BaseURL>`;
+              });
+            } else {
+              const noProto = baseUrl.replace(/^https?:\/\//, '');
+              const proxyBase = `${streamProxyPath}/raw/${hdneaPart}${chPart}${baseUrl.startsWith('https') ? 'https' : 'http'}/${noProto}`;
+              rewritten = rewritten.replace(/<Period([^>]*)>/, `<Period$1>\n<BaseURL>${proxyBase}</BaseURL>`);
+            }
 
             if (!rewritten.includes('<UTCTiming')) {
               rewritten = rewritten.replace(/<MPD([^>]*)>/, `<MPD$1><UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="/api/dashtime"/>`);
@@ -623,10 +671,10 @@ function generateDateTime() {
       }, (proxyRes) => {
         console.log(`[STREAM PROXY] ${proxyRes.statusCode} <- ${targetUrl.split('?')[0]}`);
 
-        // If 403 (token expired or missing), auto-refresh token and retry once
-        if (proxyRes.statusCode === 403 && !req._hasRetried403 && (activeChannelId || targetUrl.includes('Colors_Kannada'))) {
+        // If 403 (token expired or missing), auto-refresh token and retry once for ANY channel
+        const targetChannelId = activeChannelId || findChannelIdFromUrl(targetUrl);
+        if (proxyRes.statusCode === 403 && !req._hasRetried403 && targetChannelId) {
           req._hasRetried403 = true;
-          const targetChannelId = activeChannelId || '757';
           console.warn(`[STREAM PROXY] 403 encountered for ${targetUrl.split('?')[0]}. Auto-refreshing token for channel ${targetChannelId}...`);
           return refreshChannelHdnea(targetChannelId, (refreshErr, freshHdnea) => {
             if (refreshErr || !freshHdnea) {
@@ -754,6 +802,16 @@ function generateDateTime() {
                 crmid: crm,
                 uniqueId: unique,
               });
+
+              if (targetPath.includes('/playback/')) {
+                const requestedChId = proxyHeaders['channel_id'] || (bodyBuffer.toString('utf8').match(/channel_id=(\d+)/) || [])[1];
+                const resultUrl = (json.mpd && (json.mpd.result || (json.mpd.bitrates && (json.mpd.bitrates.high || json.mpd.bitrates.auto)))) || json.result || '';
+                const slugMatch = resultUrl.match(/\/bpk-tv\/([^\/]+)\//);
+                if (slugMatch && requestedChId) {
+                  channelSlugToIdMap.set(slugMatch[1], String(requestedChId));
+                  console.log(`[CHANNEL MAP] Associated slug ${slugMatch[1]} with channelId ${requestedChId}`);
+                }
+              }
             } catch (_) {}
           }
 

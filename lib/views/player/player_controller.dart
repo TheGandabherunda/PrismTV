@@ -119,18 +119,7 @@ class PlayerController extends GetxController {
 
   String _buildStreamUrlForQuality(QualityOption quality) {
     if (_baseStreamUrl.isEmpty) return '';
-    if (quality.id == 'auto' || _baseStreamUrl.contains('.mpd')) return _baseStreamUrl;
-
-    // Apply bitrate bounds into stream URL
-    var url = _baseStreamUrl;
-    if (url.contains('minrate=') && url.contains('maxrate=')) {
-      url = url.replaceAll(RegExp(r'minrate=\d+'), 'minrate=${quality.minRate}');
-      url = url.replaceAll(RegExp(r'maxrate=\d+'), 'maxrate=${quality.maxRate}');
-    } else {
-      final sep = url.contains('?') ? '&' : '?';
-      url = '$url${sep}minrate=${quality.minRate}&maxrate=${quality.maxRate}';
-    }
-    return url;
+    return _baseStreamUrl;
   }
 
   Future<void> changeQuality(QualityOption option) async {

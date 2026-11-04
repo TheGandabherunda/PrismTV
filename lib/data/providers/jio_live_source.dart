@@ -310,18 +310,34 @@ class JioLiveSource implements ILiveTvSource {
         String rawStreamUrl = '';
         String drmLicenseUrl = '';
 
-        if (mpd != null) {
-          final mpdBitrates = mpd['bitrates'] as Map<String, dynamic>?;
-          // Prefer mpd.bitrates.high which contains 1080p + 720p representations (minrate=840000)
-          // while preserving all audio tracks. Fallback to mpd.result or mpd.bitrates.auto.
-          final highMpd = mpdBitrates != null ? (mpdBitrates['high'] as String? ?? mpdBitrates['auto'] as String?) : null;
-          rawStreamUrl = highMpd ?? (mpd['result'] as String?) ?? '';
-          drmLicenseUrl = (mpd['key'] as String?) ?? '';
-        }
-        if (rawStreamUrl.isEmpty) {
+        if (kIsWeb) {
+          // On Web, Shaka Player natively decrypts Widevine MPEG-DASH for authentic 1080p Full HD broadcast
+          if (mpd != null) {
+            final mpdBitrates = mpd['bitrates'] as Map<String, dynamic>?;
+            // Prefer mpd.bitrates.high which contains 1080p + 720p representations (minrate=840000)
+            // while preserving all audio tracks. Fallback to mpd.result or mpd.bitrates.auto.
+            final highMpd = mpdBitrates != null ? (mpdBitrates['high'] as String? ?? mpdBitrates['auto'] as String?) : null;
+            rawStreamUrl = highMpd ?? (mpd['result'] as String?) ?? '';
+            drmLicenseUrl = (mpd['key'] as String?) ?? '';
+          }
+          if (rawStreamUrl.isEmpty) {
+            rawStreamUrl = data['result'] ?? '';
+            if (rawStreamUrl.isEmpty && bitrates != null) {
+              rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? '';
+            }
+          }
+        } else {
+          // On Native Android TV / Mobile, standard video_player uses ExoPlayer for HLS streams.
+          // Fallback to result or bitrates.auto, and strip destructive minrate that removes video tracks.
           rawStreamUrl = data['result'] ?? '';
           if (rawStreamUrl.isEmpty && bitrates != null) {
             rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? '';
+          }
+          // Remove destructive minrate that strips video track on Jio's Broadpeak packager
+          rawStreamUrl = rawStreamUrl.replaceAll(RegExp(r'[?&]minrate=\d+'), '');
+          if (rawStreamUrl.isEmpty && mpd != null) {
+            rawStreamUrl = (mpd['result'] as String?) ?? '';
+            drmLicenseUrl = (mpd['key'] as String?) ?? '';
           }
         }
 

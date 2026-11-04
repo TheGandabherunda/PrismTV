@@ -48,6 +48,27 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #000;
+      overflow: hidden;
+    }
+    video {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: contain !important;
+      background-color: #000 !important;
+    }
+    flt-platform-view {
+      width: 100% !important;
+      height: 100% !important;
+    }
+  </style>
+
   <!-- HLS.js & Shaka Player Video Engines (Essential for 1080p Broadpeak HLS & Widevine DASH) -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.5/dist/shaka-player.compiled.js"></script>
@@ -117,13 +138,13 @@
             var drmConfig = {};
             try {
               var u = new URL(val, window.location.origin);
-              var chId = u.searchParams.get('channel_id') || '757';
+              var chId = u.searchParams.get('channel_id') || '';
               var drmKey = u.searchParams.get('drm_key') || '';
               if (drmKey) {
                 var prefix = window.location.pathname.toLowerCase().indexOf('/prismtv') === 0 ? '/prismTV' : '';
                 drmConfig = {
                   servers: {
-                    'com.widevine.alpha': prefix + '/api/drm-proxy?channel_id=' + chId + '&url=' + encodeURIComponent(drmKey)
+                    'com.widevine.alpha': prefix + '/api/drm-proxy?' + (chId ? 'channel_id=' + chId + '&' : '') + 'url=' + encodeURIComponent(drmKey)
                   },
                   advanced: {
                     'com.widevine.alpha': {
@@ -145,11 +166,7 @@
               },
               abr: {
                 enabled: true,
-                defaultBandwidthEstimate: 10000000,
-                restrictions: {
-                  minHeight: 720,
-                  maxHeight: 1080
-                }
+                defaultBandwidthEstimate: 10000000
               },
               streaming: {
                 bufferingGoal: 6,
@@ -260,16 +277,20 @@
             console.log('[PrismTV Shaka] Quality set to Auto');
             return true;
           }
+          var tracks = player.getVariantTracks() || [];
+          var heights = tracks.map(function(t) { return t.height || 0; }).filter(function(h) { return h > 0; });
+          var maxH = heights.length > 0 ? Math.max.apply(null, heights) : 1080;
+          var effectiveH = Math.min(targetHeight, maxH);
           player.configure({
             abr: {
               enabled: true,
               restrictions: {
-                minHeight: targetHeight,
-                maxHeight: targetHeight
+                minHeight: effectiveH,
+                maxHeight: effectiveH
               }
             }
           });
-          console.log('[PrismTV Shaka] Video quality locked to ' + targetHeight + 'p without buffer flush (audio preserved)');
+          console.log('[PrismTV Shaka] Video quality locked to ' + effectiveH + 'p without buffer flush (audio preserved)');
           return true;
         }
 
