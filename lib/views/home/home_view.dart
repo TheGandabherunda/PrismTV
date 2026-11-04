@@ -7,6 +7,7 @@ import 'home_controller.dart';
 import 'widgets/category_pill.dart';
 import 'widgets/channel_card.dart';
 import 'widgets/epg_preview_bar.dart';
+import 'widgets/language_pill.dart';
 import 'widgets/tv_sidebar.dart';
 
 class HomeView extends GetView<HomeController> {
@@ -31,7 +32,6 @@ class HomeView extends GetView<HomeController> {
           // Main TV Content Area
           Expanded(
             child: Obx(() {
-              // If user selected Movies or Shows (future sources)
               if (controller.selectedSidebarIndex.value == 1) {
                 return _buildFutureSourceView('Movies', Icons.movie_creation_rounded);
               }
@@ -60,10 +60,11 @@ class HomeView extends GetView<HomeController> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Row
+          // Top Navigation / Header Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Brand & Channel Count
               Row(
                 children: [
                   ShaderMask(
@@ -82,47 +83,121 @@ class HomeView extends GetView<HomeController> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceElevated,
+                      color: AppColors.surfaceCard,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: AppColors.unfocusedBorder),
                     ),
-                    child: Obx(
-                      () => Text(
-                        '${controller.filteredChannels.length} CHANNELS',
+                    child: Obx(() {
+                      final count = controller.filteredChannels.length;
+                      final lang = controller.selectedLanguage.value;
+                      final label = lang.id == 'all'
+                          ? '$count CHANNELS'
+                          : '$count ${lang.title.toUpperCase()}';
+                      return Text(
+                        label,
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 1.0,
-                          color: AppColors.primary,
+                          letterSpacing: 0.8,
+                          color: AppColors.primaryLight,
                         ),
-                      ),
-                    ),
+                      );
+                    }),
                   ),
                 ],
               ),
 
-              // Current Clock
-              Text(
-                currentTime,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.5,
-                  color: AppColors.textSecondary,
-                ),
+              // Search Bar & Clock
+              Row(
+                children: [
+                  // Fast Instant Search Box
+                  Container(
+                    width: 220,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceCard,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.unfocusedBorder),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.search_rounded, size: 18, color: AppColors.textSecondary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: controller.searchController,
+                            onChanged: controller.onSearchChanged,
+                            style: const TextStyle(fontSize: 13, color: Colors.white),
+                            decoration: const InputDecoration(
+                              hintText: 'Search channel...',
+                              hintStyle: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ),
+                        Obx(
+                          () => controller.searchQuery.value.isNotEmpty
+                              ? GestureDetector(
+                                  onTap: controller.clearSearch,
+                                  child: const Icon(Icons.close_rounded, size: 16, color: AppColors.textSecondary),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 20),
+
+                  // Current Clock
+                  Text(
+                    currentTime,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
 
-          // Category Pills Carousel
+          // Filter Row 1: Languages (All, Kannada, English, Hindi, Tamil, Telugu, etc.)
           SizedBox(
-            height: 44,
+            height: 36,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: controller.languages.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final lang = controller.languages[index];
+                return Obx(
+                  () => LanguagePill(
+                    language: lang,
+                    isSelected: controller.selectedLanguage.value.id == lang.id,
+                    onTap: () => controller.selectLanguage(lang),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // Filter Row 2: Categories / Genres (All, Favorites, Entertainment, Movies, etc.)
+          SizedBox(
+            height: 38,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: controller.categories.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
                 final cat = controller.categories[index];
                 return Obx(
@@ -136,7 +211,7 @@ class HomeView extends GetView<HomeController> {
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
           // Channels Grid
           Expanded(
@@ -155,8 +230,26 @@ class HomeView extends GetView<HomeController> {
                       const Icon(Icons.tv_off_rounded, size: 54, color: AppColors.textMuted),
                       const SizedBox(height: 12),
                       const Text(
-                        'No channels found in this category',
-                        style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
+                        'No channels found matching the selected filters',
+                        style: TextStyle(fontSize: 15, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 14),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.refresh_rounded, size: 16, color: AppColors.primaryLight),
+                        label: const Text(
+                          'Reset All Filters',
+                          style: TextStyle(color: Colors.white, fontSize: 13),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.unfocusedBorder),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        ),
+                        onPressed: () {
+                          controller.clearSearch();
+                          controller.selectLanguage(controller.languages.first);
+                          controller.selectCategory(controller.categories.first);
+                        },
                       ),
                     ],
                   ),
@@ -167,8 +260,8 @@ class HomeView extends GetView<HomeController> {
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 5,
                   childAspectRatio: 1.35,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
                 ),
                 itemCount: controller.filteredChannels.length,
                 itemBuilder: (context, index) {
@@ -188,7 +281,7 @@ class HomeView extends GetView<HomeController> {
             }),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // Bottom EPG Preview Bar
           Obx(
@@ -222,19 +315,26 @@ class HomeView extends GetView<HomeController> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 76,
+              height: 76,
               decoration: BoxDecoration(
                 gradient: AppColors.prismGradient,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: const [
+                  BoxShadow(
+                    color: AppColors.primaryGlow,
+                    blurRadius: 18,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
-              child: Center(child: Icon(icon, size: 40, color: Colors.white)),
+              child: Center(child: Icon(icon, size: 38, color: Colors.white)),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 22),
             Text(
               '$title Hub Ready',
               style: const TextStyle(
-                fontSize: 24,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
@@ -251,4 +351,3 @@ class HomeView extends GetView<HomeController> {
     );
   }
 }
-

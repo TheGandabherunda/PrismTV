@@ -20,9 +20,9 @@ class OsdOverlay extends StatelessWidget {
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Color(0xCC0A0C13),
+            Color(0xE6000000),
             Colors.transparent,
-            Color(0xCC0A0C13),
+            Color(0xE6000000),
           ],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -75,7 +75,7 @@ class OsdOverlay extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        gradient: AppColors.prismGradient,
+                        gradient: AppColors.hdBadgeGradient,
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(
@@ -83,7 +83,7 @@ class OsdOverlay extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
-                          color: Colors.black,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -168,16 +168,25 @@ class OsdOverlay extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          gradient: hasFocus ? AppColors.prismGradient : null,
-                          color: hasFocus ? null : AppColors.primary,
+                          gradient: AppColors.activeTabGradient,
                           shape: BoxShape.circle,
+                          border: Border.all(
+                            color: hasFocus ? Colors.white : Colors.transparent,
+                            width: hasFocus ? 2 : 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: hasFocus ? AppColors.primaryGlow : AppColors.secondaryGlow,
+                              blurRadius: hasFocus ? 20 : 12,
+                            ),
+                          ],
                         ),
                         child: Obx(
                           () => Icon(
                             controller.isPlaying.value
                                 ? Icons.pause_rounded
                                 : Icons.play_arrow_rounded,
-                            color: Colors.black,
+                            color: Colors.white,
                             size: 34,
                           ),
                         ),

@@ -3,6 +3,7 @@ import 'package:prism_tv/data/models/auth_session.dart';
 import 'package:prism_tv/data/models/category_model.dart';
 import 'package:prism_tv/data/models/channel_model.dart';
 import 'package:prism_tv/data/models/epg_program_model.dart';
+import 'package:prism_tv/data/models/language_model.dart';
 
 void main() {
   group('PrismTV Core Models & Architecture Tests', () {
@@ -64,10 +65,14 @@ void main() {
       expect(program.progress, lessThanOrEqualTo(1.0));
     });
 
-    test('Default category list contains Kannada, Entertainment, Sports, and Movies', () {
+    test('Default category and language lists contain required entries', () {
       final categories = CategoryModel.defaultCategories;
+      final languages = LanguageModel.defaultLanguages;
 
-      expect(categories.any((c) => c.id == 'kannada'), isTrue);
+      expect(languages.any((l) => l.id == 'kannada'), isTrue);
+      expect(languages.any((l) => l.id == 'hindi'), isTrue);
+      expect(languages.any((l) => l.id == 'english'), isTrue);
+
       expect(categories.any((c) => c.id == 'entertainment'), isTrue);
       expect(categories.any((c) => c.id == 'sports'), isTrue);
       expect(categories.any((c) => c.id == 'movies'), isTrue);

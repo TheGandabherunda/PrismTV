@@ -32,29 +32,36 @@ class TvSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 72,
-      decoration: BoxDecoration(
+      width: 68,
+      decoration: const BoxDecoration(
         color: AppColors.surface,
-        border: const Border(
+        border: Border(
           right: BorderSide(color: AppColors.unfocusedBorder, width: 1),
         ),
       ),
       child: Column(
         children: [
-          const SizedBox(height: 24),
-          // Mini Logo
+          const SizedBox(height: 20),
+          // Mini Brand Icon
           Container(
-            width: 42,
-            height: 42,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               gradient: AppColors.prismGradient,
               borderRadius: BorderRadius.circular(12),
+              boxShadow: const [
+                BoxShadow(
+                  color: AppColors.primaryGlow,
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                ),
+              ],
             ),
             child: const Center(
-              child: Icon(Icons.stream_rounded, size: 24, color: Colors.white),
+              child: Icon(Icons.stream_rounded, size: 22, color: Colors.white),
             ),
           ),
-          const SizedBox(height: 36),
+          const SizedBox(height: 32),
 
           // Nav Items
           ...List.generate(items.length, (index) {
@@ -62,37 +69,47 @@ class TvSidebar extends StatelessWidget {
             final isSelected = selectedIndex == index;
 
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              padding: const EdgeInsets.symmetric(vertical: 6),
               child: Focus(
                 child: Builder(
                   builder: (ctx) {
                     final hasFocus = Focus.of(ctx).hasFocus;
                     return InkWell(
                       onTap: () => onSelect(index),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                       child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: 48,
-                        height: 48,
+                        duration: const Duration(milliseconds: 160),
+                        width: 46,
+                        height: 46,
                         decoration: BoxDecoration(
+                          gradient: isSelected ? AppColors.activeTabGradient : null,
                           color: hasFocus
                               ? AppColors.focusedBackground
-                              : (isSelected ? AppColors.primaryGlow : Colors.transparent),
-                          borderRadius: BorderRadius.circular(14),
+                              : (isSelected ? null : Colors.transparent),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: hasFocus
                                 ? AppColors.primary
-                                : (isSelected ? AppColors.primary : Colors.transparent),
+                                : (isSelected ? Colors.transparent : Colors.transparent),
                             width: hasFocus ? 2 : 1,
                           ),
+                          boxShadow: (isSelected || hasFocus)
+                              ? const [
+                                  BoxShadow(
+                                    color: AppColors.primaryGlow,
+                                    blurRadius: 10,
+                                    spreadRadius: 1,
+                                  ),
+                                ]
+                              : null,
                         ),
                         child: Center(
                           child: Icon(
                             item.icon,
-                            color: hasFocus || isSelected
-                                ? AppColors.primary
-                                : AppColors.textSecondary,
-                            size: 24,
+                            color: isSelected
+                                ? Colors.white
+                                : (hasFocus ? AppColors.primaryLight : AppColors.textSecondary),
+                            size: 22,
                           ),
                         ),
                       ),
@@ -107,21 +124,21 @@ class TvSidebar extends StatelessWidget {
 
           // Auth / Settings Button
           Padding(
-            padding: const EdgeInsets.only(bottom: 24),
+            padding: const EdgeInsets.only(bottom: 20),
             child: Focus(
               child: Builder(
                 builder: (ctx) {
                   final hasFocus = Focus.of(ctx).hasFocus;
                   return InkWell(
                     onTap: onAuthAction,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 180),
-                      width: 48,
-                      height: 48,
+                      duration: const Duration(milliseconds: 160),
+                      width: 46,
+                      height: 46,
                       decoration: BoxDecoration(
                         color: hasFocus ? AppColors.focusedBackground : Colors.transparent,
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: hasFocus ? AppColors.primary : Colors.transparent,
                           width: hasFocus ? 2 : 1,
@@ -130,8 +147,8 @@ class TvSidebar extends StatelessWidget {
                       child: Center(
                         child: Icon(
                           isAuthenticated ? Icons.account_circle_rounded : Icons.login_rounded,
-                          color: isAuthenticated ? AppColors.primary : AppColors.textSecondary,
-                          size: 26,
+                          color: isAuthenticated ? AppColors.primaryLight : AppColors.textSecondary,
+                          size: 24,
                         ),
                       ),
                     ),
@@ -145,4 +162,3 @@ class TvSidebar extends StatelessWidget {
     );
   }
 }
-

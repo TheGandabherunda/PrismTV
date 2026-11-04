@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../data/models/category_model.dart';
 import '../../data/models/channel_model.dart';
 import '../../data/models/epg_program_model.dart';
+import '../../data/models/language_model.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/channel_repository.dart';
 import '../../routes/app_routes.dart';
@@ -15,8 +16,14 @@ class HomeController extends GetxController {
   final RxList<ChannelModel> allChannels = <ChannelModel>[].obs;
   final RxList<ChannelModel> filteredChannels = <ChannelModel>[].obs;
 
+  final List<LanguageModel> languages = LanguageModel.defaultLanguages;
+  late final Rx<LanguageModel> selectedLanguage;
+
   final List<CategoryModel> categories = CategoryModel.defaultCategories;
   late final Rx<CategoryModel> selectedCategory;
+
+  final TextEditingController searchController = TextEditingController();
+  final RxString searchQuery = ''.obs;
 
   final RxInt selectedSidebarIndex = 0.obs;
   final Rxn<ChannelModel> focusedChannel = Rxn<ChannelModel>();
@@ -29,13 +36,21 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    selectedCategory = categories.first.obs;
+    selectedLanguage = languages.first.obs; // Defaults to All Languages
+    selectedCategory = categories.first.obs; // Defaults to All Channels
     isAuthenticated.value = _authRepo.isAuthenticated;
+
     if (!isAuthenticated.value) {
       Future.microtask(() => Get.offAllNamed(AppRoutes.auth));
       return;
     }
     loadChannels();
+  }
+
+  @override
+  void onClose() {
+    searchController.dispose();
+    super.onClose();
   }
 
   Future<void> loadChannels() async {
@@ -52,8 +67,42 @@ class HomeController extends GetxController {
     isLoadingChannels.value = false;
   }
 
+  void selectLanguage(LanguageModel language) {
+    selectedLanguage.value = language;
+    _filterChannels();
+    if (filteredChannels.isNotEmpty) {
+      onChannelFocused(filteredChannels.first);
+    } else {
+      focusedChannel.value = null;
+      currentProgram.value = null;
+    }
+  }
+
   void selectCategory(CategoryModel category) {
     selectedCategory.value = category;
+    _filterChannels();
+    if (filteredChannels.isNotEmpty) {
+      onChannelFocused(filteredChannels.first);
+    } else {
+      focusedChannel.value = null;
+      currentProgram.value = null;
+    }
+  }
+
+  void onSearchChanged(String query) {
+    searchQuery.value = query;
+    _filterChannels();
+    if (filteredChannels.isNotEmpty) {
+      onChannelFocused(filteredChannels.first);
+    } else {
+      focusedChannel.value = null;
+      currentProgram.value = null;
+    }
+  }
+
+  void clearSearch() {
+    searchController.clear();
+    searchQuery.value = '';
     _filterChannels();
     if (filteredChannels.isNotEmpty) {
       onChannelFocused(filteredChannels.first);
@@ -72,18 +121,47 @@ class HomeController extends GetxController {
   }
 
   void _filterChannels() {
+    final lang = selectedLanguage.value;
     final cat = selectedCategory.value;
-    if (cat.id == 'all') {
-      filteredChannels.assignAll(allChannels);
-    } else if (cat.id == 'favorites') {
-      filteredChannels.assignAll(allChannels.where((c) => c.isFavorite));
-    } else if (cat.jioLanguageId != null) {
-      filteredChannels.assignAll(allChannels.where((c) => c.languageId == cat.jioLanguageId));
-    } else if (cat.jioCategoryId != null) {
-      filteredChannels.assignAll(allChannels.where((c) => c.categoryId == cat.jioCategoryId));
-    } else {
-      filteredChannels.assignAll(allChannels);
-    }
+    final query = searchQuery.value.trim().toLowerCase();
+
+    final filtered = allChannels.where((c) {
+      // 1. Language Filter
+      final bool matchesLang;
+      if (lang.id == 'all' || lang.jioLanguageId == null) {
+        matchesLang = true;
+      } else {
+        matchesLang = c.languageId == lang.jioLanguageId;
+      }
+
+      // 2. Category Filter
+      final bool matchesCat;
+      if (cat.id == 'all') {
+        matchesCat = true;
+      } else if (cat.id == 'favorites') {
+        matchesCat = c.isFavorite;
+      } else if (cat.jioCategoryId != null) {
+        matchesCat = c.categoryId == cat.jioCategoryId;
+      } else {
+        matchesCat = true;
+      }
+
+      // 3. Search Filter
+      final bool matchesSearch;
+      if (query.isEmpty) {
+        matchesSearch = true;
+      } else {
+        final nameMatches = c.channelName.toLowerCase().contains(query);
+        final idMatches = c.channelId.toString().contains(query);
+        final langMatches = c.languageName.toLowerCase().contains(query);
+        final catMatches = c.categoryName.toLowerCase().contains(query);
+        matchesSearch = nameMatches || idMatches || langMatches || catMatches;
+      }
+
+      return matchesLang && matchesCat && matchesSearch;
+    }).toList();
+
+    filteredChannels.assignAll(filtered);
   }
 
   Future<void> onChannelFocused(ChannelModel channel) async {
@@ -92,7 +170,6 @@ class HomeController extends GetxController {
     try {
       final epg = await _channelRepo.getEpg(channel.channelId);
       if (epg.isNotEmpty) {
-        // Find current live program or fallback to first
         currentProgram.value = epg.firstWhere(
           (p) => p.isNowPlaying,
           orElse: () => epg.first,
@@ -109,7 +186,7 @@ class HomeController extends GetxController {
   Future<void> toggleFavorite(ChannelModel channel) async {
     await _channelRepo.toggleFavorite(channel);
     allChannels.refresh();
-    filteredChannels.refresh();
+    _filterChannels();
   }
 
   void playChannel(ChannelModel channel) {
@@ -145,6 +222,11 @@ class HomeController extends GetxController {
         child: Container(
           constraints: const BoxConstraints(maxWidth: 420),
           padding: const EdgeInsets.all(28),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.unfocusedBorder),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -171,7 +253,7 @@ class HomeController extends GetxController {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
+                  color: AppColors.surfaceCard,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.unfocusedBorder),
                 ),
@@ -181,7 +263,7 @@ class HomeController extends GetxController {
                     const Divider(color: AppColors.unfocusedBorder, height: 16),
                     _infoRow('Service Tier', 'PrismTV Live Streaming'),
                     const Divider(color: AppColors.unfocusedBorder, height: 16),
-                    _infoRow('Device Target', 'PrismTV Smart TV'),
+                    _infoRow('Device Target', 'PrismTV Smart TV / Web'),
                   ],
                 ),
               ),
@@ -203,7 +285,7 @@ class HomeController extends GetxController {
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accent,
+                        backgroundColor: AppColors.liveRed,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -239,4 +321,3 @@ class HomeController extends GetxController {
     Get.offAllNamed(AppRoutes.auth);
   }
 }
-

@@ -38,10 +38,11 @@ class AuthView extends GetView<AuthController> {
                         decoration: BoxDecoration(
                           gradient: AppColors.prismGradient,
                           borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
+                          boxShadow: const [
                             BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.35),
+                              color: AppColors.primaryGlow,
                               blurRadius: 20,
+                              spreadRadius: 2,
                             ),
                           ],
                         ),
@@ -50,13 +51,16 @@ class AuthView extends GetView<AuthController> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      const Text(
-                        'PRISM TV',
-                        style: TextStyle(
-                          fontSize: 34,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 3,
-                          color: Colors.white,
+                      ShaderMask(
+                        shaderCallback: (bounds) => AppColors.prismGradient.createShader(bounds),
+                        child: const Text(
+                          'PRISM TV',
+                          style: TextStyle(
+                            fontSize: 34,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 3,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                       const Text(
@@ -68,7 +72,7 @@ class AuthView extends GetView<AuthController> {
                       ),
                       const SizedBox(height: 24),
                       const Text(
-                        'Log in with your registered Jio mobile number to access all live TV channels, high-definition regional broadcasts, and real-time EPG program schedules.',
+                        'Log in with your registered mobile number to access all live TV channels, high-definition regional broadcasts, and real-time EPG program schedules.',
                         style: TextStyle(
                           fontSize: 14,
                           height: 1.6,
@@ -78,13 +82,13 @@ class AuthView extends GetView<AuthController> {
                       const SizedBox(height: 16),
                       const Row(
                         children: [
-                          Icon(Icons.keyboard_rounded, size: 16, color: AppColors.primary),
+                          Icon(Icons.keyboard_rounded, size: 16, color: AppColors.primaryLight),
                           SizedBox(width: 8),
                           Text(
                             'Use TV remote keypad or physical keyboard',
                             style: TextStyle(
                               fontSize: 12,
-                              color: AppColors.primary,
+                              color: AppColors.primaryLight,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -114,7 +118,7 @@ class AuthView extends GetView<AuthController> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Text(
-                              controller.isOtpSent.value ? 'Enter 6-Digit OTP' : 'Enter Jio Mobile Number',
+                              controller.isOtpSent.value ? 'Enter 6-Digit OTP' : 'Enter Mobile Number',
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -127,9 +131,9 @@ class AuthView extends GetView<AuthController> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                               decoration: BoxDecoration(
-                                color: AppColors.surfaceElevated,
+                                color: AppColors.surfaceCard,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppColors.primaryGlow, width: 1.5),
+                                border: Border.all(color: AppColors.primaryLight, width: 1.5),
                               ),
                               child: Row(
                                 children: [
@@ -139,7 +143,7 @@ class AuthView extends GetView<AuthController> {
                                       style: TextStyle(
                                         fontSize: 22,
                                         fontWeight: FontWeight.bold,
-                                        color: AppColors.primary,
+                                        color: AppColors.primaryLight,
                                       ),
                                     ),
                                   Expanded(
@@ -190,17 +194,19 @@ class AuthView extends GetView<AuthController> {
                                       duration: const Duration(milliseconds: 200),
                                       padding: const EdgeInsets.symmetric(vertical: 14),
                                       decoration: BoxDecoration(
-                                        gradient: hasFocus ? AppColors.prismGradient : null,
-                                        color: hasFocus ? null : AppColors.primary,
+                                        gradient: AppColors.activeTabGradient,
                                         borderRadius: BorderRadius.circular(12),
-                                        boxShadow: hasFocus
-                                            ? [
-                                                BoxShadow(
-                                                  color: AppColors.primary.withValues(alpha: 0.5),
-                                                  blurRadius: 16,
-                                                )
-                                              ]
-                                            : null,
+                                        border: Border.all(
+                                          color: hasFocus ? Colors.white : Colors.transparent,
+                                          width: hasFocus ? 2 : 1,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: hasFocus ? AppColors.primaryGlow : AppColors.secondaryGlow,
+                                            blurRadius: hasFocus ? 20 : 12,
+                                            spreadRadius: hasFocus ? 2 : 0,
+                                          ),
+                                        ],
                                       ),
                                       child: Center(
                                         child: controller.isLoading.value
@@ -217,7 +223,7 @@ class AuthView extends GetView<AuthController> {
                                                     ? 'VERIFY & START STREAMING'
                                                     : 'REQUEST OTP',
                                                 style: const TextStyle(
-                                                  color: Colors.black,
+                                                  color: Colors.white,
                                                   fontWeight: FontWeight.w900,
                                                   letterSpacing: 1.2,
                                                 ),
@@ -236,7 +242,7 @@ class AuthView extends GetView<AuthController> {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: controller.isError.value ? AppColors.accent : AppColors.primary,
+                                  color: controller.isError.value ? AppColors.secondary : AppColors.primaryLight,
                                 ),
                               ),
                             ],
@@ -313,7 +319,7 @@ class AuthView extends GetView<AuthController> {
                 duration: const Duration(milliseconds: 150),
                 height: 48,
                 decoration: BoxDecoration(
-                  color: hasFocus ? AppColors.focusedBackground : AppColors.surfaceElevated,
+                  color: hasFocus ? AppColors.focusedBackground : AppColors.surfaceCard,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: hasFocus ? AppColors.primary : AppColors.unfocusedBorder,
@@ -326,7 +332,7 @@ class AuthView extends GetView<AuthController> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: hasFocus ? AppColors.primary : Colors.white,
+                      color: hasFocus ? AppColors.primaryLight : Colors.white,
                     ),
                   ),
                 ),
@@ -351,10 +357,10 @@ class AuthView extends GetView<AuthController> {
                 duration: const Duration(milliseconds: 150),
                 height: 48,
                 decoration: BoxDecoration(
-                  color: hasFocus ? AppColors.focusedBackground : AppColors.surfaceElevated,
+                  color: hasFocus ? AppColors.focusedBackground : AppColors.surfaceCard,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: hasFocus ? AppColors.accent : AppColors.unfocusedBorder,
+                    color: hasFocus ? AppColors.secondary : AppColors.unfocusedBorder,
                     width: hasFocus ? 2 : 1,
                   ),
                 ),
@@ -364,7 +370,7 @@ class AuthView extends GetView<AuthController> {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: hasFocus ? AppColors.accent : AppColors.textSecondary,
+                      color: hasFocus ? AppColors.secondary : AppColors.textSecondary,
                     ),
                   ),
                 ),

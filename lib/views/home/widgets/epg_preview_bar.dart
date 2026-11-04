@@ -27,22 +27,22 @@ class EpgPreviewBar extends StatelessWidget {
     final endTimeStr = program != null ? timeFormatter.format(program!.endTime) : '--:--';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.unfocusedBorder),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x66000000),
-            blurRadius: 20,
+            color: Color(0xCC000000),
+            blurRadius: 24,
             offset: Offset(0, -4),
           ),
         ],
       ),
       child: Row(
         children: [
-          // Channel Info
+          // Channel Info Block
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -50,30 +50,37 @@ class EpgPreviewBar extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    width: 8,
-                    height: 8,
+                    width: 7,
+                    height: 7,
                     decoration: const BoxDecoration(
-                      color: AppColors.accent,
+                      color: AppColors.liveRed,
                       shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.liveRed,
+                          blurRadius: 6,
+                          spreadRadius: 1,
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 7),
                   const Text(
-                    'LIVE',
+                    'LIVE BROADCAST',
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
-                      color: AppColors.accent,
+                      letterSpacing: 1.2,
+                      color: AppColors.liveRed,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 channel!.channelName,
                 style: const TextStyle(
-                  fontSize: 18,
+                  fontSize: 17,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
@@ -88,9 +95,9 @@ class EpgPreviewBar extends StatelessWidget {
             ],
           ),
 
-          const SizedBox(width: 32),
-          Container(width: 1, height: 50, color: AppColors.unfocusedBorder),
-          const SizedBox(width: 32),
+          const SizedBox(width: 28),
+          Container(width: 1, height: 44, color: AppColors.unfocusedBorder),
+          const SizedBox(width: 28),
 
           // Program Details & Timeline
           Expanded(
@@ -113,7 +120,7 @@ class EpgPreviewBar extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                             color: Colors.white,
                           ),
@@ -123,30 +130,30 @@ class EpgPreviewBar extends StatelessWidget {
                         '$startTimeStr - $endTimeStr',
                         style: const TextStyle(
                           fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryLight,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   // Progress Bar
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(3),
                     child: LinearProgressIndicator(
-                      value: program?.progress ?? 0.3,
+                      value: program?.progress ?? 0.35,
                       minHeight: 4,
                       backgroundColor: AppColors.surfaceElevated,
                       valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 5),
                   Text(
-                    program?.description ?? 'Now playing on PrismTV live network.',
+                    program?.description ?? 'Now broadcasting live on PrismTV network.',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       color: AppColors.textSecondary,
                     ),
                   ),
@@ -155,9 +162,9 @@ class EpgPreviewBar extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(width: 24),
+          const SizedBox(width: 20),
 
-          // Watch Now Button Hint
+          // Action CTA (Watch Now)
           Focus(
             child: Builder(
               builder: (ctx) {
@@ -167,15 +174,24 @@ class EpgPreviewBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                     decoration: BoxDecoration(
-                      gradient: hasFocus ? AppColors.prismGradient : null,
+                      gradient: hasFocus ? AppColors.activeTabGradient : null,
                       color: hasFocus ? null : AppColors.surfaceElevated,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: hasFocus ? AppColors.primary : AppColors.unfocusedBorder,
                         width: hasFocus ? 2 : 1,
                       ),
+                      boxShadow: hasFocus
+                          ? [
+                              BoxShadow(
+                                color: AppColors.primaryGlow,
+                                blurRadius: 16,
+                                spreadRadius: 1,
+                              ),
+                            ]
+                          : null,
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -183,16 +199,16 @@ class EpgPreviewBar extends StatelessWidget {
                         Icon(
                           Icons.play_arrow_rounded,
                           size: 20,
-                          color: hasFocus ? Colors.black : AppColors.primary,
+                          color: hasFocus ? Colors.white : AppColors.primaryLight,
                         ),
                         const SizedBox(width: 6),
                         Text(
                           'WATCH [OK]',
                           style: TextStyle(
-                            fontSize: 13,
+                            fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            letterSpacing: 1.0,
-                            color: hasFocus ? Colors.black : Colors.white,
+                            letterSpacing: 0.8,
+                            color: hasFocus ? Colors.white : AppColors.textPrimary,
                           ),
                         ),
                       ],
@@ -207,4 +223,3 @@ class EpgPreviewBar extends StatelessWidget {
     );
   }
 }
-
