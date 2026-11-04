@@ -31,6 +31,11 @@ class AppColors {
   static const Color unfocusedBorder = Color(0x1AFFFFFF);    // 10% translucent border
   static const Color unfocusedCardBorder = Color(0x12FFFFFF);// 7% subtle card border
 
+  // Pure White & High-Contrast Elements (as featured in Driveasy branding)
+  static const Color pureWhite = Color(0xFFFFFFFF);          // 100% Pure Clean White
+  static const Color logoTile = Color(0xFFFFFFFF);           // White squircle app logo tile
+  static const Color whiteBorder = Color(0x33FFFFFF);        // Crisp 20% white separator/border
+
   // Typography (Ultra-Crisp & High Contrast)
   static const Color textPrimary = Color(0xFFFFFFFF);        // 100% Pure White
   static const Color textSecondary = Color(0xFFA1A1AA);      // Zinc 400
