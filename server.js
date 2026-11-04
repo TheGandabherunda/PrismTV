@@ -1,4 +1,5 @@
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -24,22 +25,69 @@ const MIME_TYPES = {
 };
 
 const server = http.createServer((req, res) => {
-  // Normalize URL and remove query string
+  // 1. Handle CORS Preflight for all endpoints
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, appname, os, devicetype, ssotoken, uniqueId, crmid, accesstoken, appkey',
+    });
+    res.end();
+    return;
+  }
+
+  // 2. Built-in CORS Proxy for Web Preview
+  if (req.url.startsWith('/api/proxy/')) {
+    const targetPath = req.url.replace('/api/proxy', '');
+    console.log(`[PROXY] ${req.method} -> https://jiotvapi.media.jio.com${targetPath}`);
+
+    const proxyHeaders = { ...req.headers };
+    delete proxyHeaders['host'];
+    delete proxyHeaders['origin'];
+    delete proxyHeaders['referer'];
+
+    const proxyReq = https.request({
+      hostname: 'jiotvapi.media.jio.com',
+      port: 443,
+      path: targetPath,
+      method: req.method,
+      headers: {
+        ...proxyHeaders,
+        host: 'jiotvapi.media.jio.com',
+      }
+    }, (proxyRes) => {
+      const responseHeaders = { ...proxyRes.headers };
+      responseHeaders['Access-Control-Allow-Origin'] = '*';
+      responseHeaders['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+      responseHeaders['Access-Control-Allow-Headers'] = '*';
+
+      res.writeHead(proxyRes.statusCode, responseHeaders);
+      proxyRes.pipe(res);
+    });
+
+    proxyReq.on('error', (err) => {
+      console.error('[PROXY ERROR]', err.message);
+      res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      res.end(JSON.stringify({ error: 'Proxy request failed', details: err.message }));
+    });
+
+    req.pipe(proxyReq);
+    return;
+  }
+
+  // 3. Serve Static Web Files
   let reqPath = decodeURI(req.url.split('?')[0]);
   if (reqPath === '/' || reqPath === '') {
     reqPath = '/index.html';
   }
 
-  // Prevent directory traversal
   const safePath = path.normalize(reqPath).replace(/^(\.\.[\/\\])+/, '');
   let filePath = path.join(WEB_ROOT, safePath);
 
-  // If path is a directory, look for index.html
   if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
     filePath = path.join(filePath, 'index.html');
   }
 
-  // SPA fallback: if file does not exist, serve index.html
   if (!fs.existsSync(filePath)) {
     filePath = path.join(WEB_ROOT, 'index.html');
   }
@@ -68,7 +116,6 @@ server.listen(PORT, () => {
   console.log(`  PRISM TV (TheGandabherunda) Live Local Preview`);
   console.log(`==================================================`);
   console.log(`  Local URL:   http://localhost:${PORT}`);
-  console.log(`  Web Root:    ${WEB_ROOT}`);
-  console.log(`  D-Pad Keys:  Arrow Keys (▲/▼/◀/▶), Enter, Esc`);
+  console.log(`  CORS Proxy:  http://localhost:${PORT}/api/proxy/`);
   console.log(`==================================================\n`);
 });

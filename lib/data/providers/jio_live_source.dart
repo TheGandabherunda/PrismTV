@@ -31,7 +31,7 @@ class JioLiveSource implements ILiveTvSource {
         Uri.parse(ApiEndpoints.sendOtpUrl),
         headers: {
           'Content-Type': 'application/json',
-          'appName': ApiEndpoints.appName,
+          'appname': ApiEndpoints.appName,
           'os': 'android',
           'devicetype': 'phone',
           'User-Agent': ApiEndpoints.defaultUserAgent,
@@ -59,7 +59,7 @@ class JioLiveSource implements ILiveTvSource {
         Uri.parse(ApiEndpoints.verifyOtpUrl),
         headers: {
           'Content-Type': 'application/json',
-          'appName': ApiEndpoints.appName,
+          'appname': ApiEndpoints.appName,
           'os': 'android',
           'devicetype': 'phone',
           'User-Agent': ApiEndpoints.defaultUserAgent,
@@ -68,10 +68,11 @@ class JioLiveSource implements ILiveTvSource {
           'number': encodedNumber,
           'otp': otp.trim(),
           'deviceInfo': {
-            'consumptionDeviceName': 'PrismTV Smart TV',
+            'consumptionDeviceName': 'SM-G930F',
             'info': {
               'type': 'android',
-              'platform': {'name': 'Android TV'},
+              'platform': {'name': 'SM-G930F'},
+              'androidId': '689f928e469502ab',
             },
           },
         }),
@@ -82,8 +83,8 @@ class JioLiveSource implements ILiveTvSource {
         final ssoToken = data['ssoToken'] ?? '';
         final sessionAttrs = data['sessionAttributes'] ?? {};
         final userAttrs = sessionAttrs['user'] ?? {};
-        final uniqueId = userAttrs['uniqueId'] ?? '';
-        final crmid = userAttrs['crmid'] ?? '';
+        final uniqueId = userAttrs['unique'] ?? userAttrs['uniqueId'] ?? '';
+        final crmid = userAttrs['subscriberId'] ?? userAttrs['crmid'] ?? '';
 
         if (ssoToken.isNotEmpty) {
           final session = AuthSession(
