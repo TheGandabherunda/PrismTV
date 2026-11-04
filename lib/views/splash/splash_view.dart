@@ -26,8 +26,7 @@ class SplashView extends GetView<SplashController> {
                 children: [
                   // Prism TV Triangle Logo Emblem
                   const PrismTriangleLogo(
-                    size: 78,
-                    showBackgroundTile: true,
+                    size: 88,
                     hasGlow: true,
                   ),
                   const SizedBox(height: 28),

@@ -33,7 +33,7 @@ class AuthView extends GetView<AuthController> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const PrismTriangleLogo(size: 52, showBackgroundTile: true, hasGlow: true),
+                      const PrismTriangleLogo(size: 58, hasGlow: true),
                       const SizedBox(height: 20),
                       ShaderMask(
                         shaderCallback: (bounds) => AppColors.prismGradient.createShader(bounds),

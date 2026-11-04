@@ -286,10 +286,15 @@ class JioLiveSource implements ILiveTvSource {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        String rawStreamUrl = data['result'] ?? '';
-        if (rawStreamUrl.isEmpty && data['bitrates'] != null) {
-          final bitrates = data['bitrates'] as Map<String, dynamic>;
-          rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? bitrates['medium'] ?? '';
+        final bitrates = data['bitrates'] as Map<String, dynamic>?;
+
+        String rawStreamUrl = '';
+        if (channel.isHd && bitrates != null) {
+          rawStreamUrl = bitrates['high'] ?? bitrates['auto'] ?? data['result'] ?? '';
+        } else if (bitrates != null) {
+          rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? data['result'] ?? '';
+        } else {
+          rawStreamUrl = data['result'] ?? '';
         }
 
         if (rawStreamUrl.isNotEmpty) {

@@ -83,9 +83,12 @@
             var hls = new Hls({
               enableWorker: true,
               lowLatencyMode: true,
+              capLevelToPlayerSize: false,
+              abrEwmaDefaultEstimate: 8000000,
+              startLevel: -1,
               backBufferLength: 30,
-              maxBufferLength: 30,
-              maxMaxBufferLength: 60,
+              maxBufferLength: 45,
+              maxMaxBufferLength: 90,
             });
             hlsInstances.set(video, hls);
             window.prismHls = hls;
@@ -94,7 +97,17 @@
             hls.attachMedia(video);
 
             hls.on(Hls.Events.MANIFEST_PARSED, function() {
-              console.log('[PrismTV] Hls manifest parsed successfully. Available levels:', (hls.levels || []).map(function(l) { return l.height + 'p'; }));
+              console.log('[PrismTV] Hls manifest parsed. Levels:', (hls.levels || []).map(function(l) { return l.height + 'p (' + Math.round(l.bitrate / 1000) + 'kbps)'; }));
+              
+              // Automatically switch to highest available HD level (1080p/720p) unless user chose a specific quality
+              if (window.prismPreferredQualityHeight && window.prismPreferredQualityHeight > 0) {
+                window.prismSetQuality(window.prismPreferredQualityHeight);
+              } else if (hls.levels && hls.levels.length > 0) {
+                var topLevel = hls.levels.length - 1;
+                hls.currentLevel = topLevel;
+                console.log('[PrismTV] Auto-selected highest HD stream level:', hls.levels[topLevel].height + 'p');
+              }
+
               video.play().catch(function(e) {
                 console.log('[PrismTV] Autoplay notice:', e);
               });
