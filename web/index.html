@@ -29,11 +29,15 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <!-- HLS.js Engine for Web Video Playback (Essential for Chrome / Edge) -->
+  <!-- HLS.js & Shaka Player Video Engines (Essential for 1080p Broadpeak HLS & Widevine DASH) -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.3.5/dist/shaka-player.compiled.js"></script>
   <script>
     (function() {
-      if (!window.Hls) return;
+      if (window.shaka) {
+        shaka.polyfill.installAll();
+      }
+
       var mediaProto = HTMLMediaElement.prototype;
       var originalSrcDesc = Object.getOwnPropertyDescriptor(mediaProto, 'src') ||
                             Object.getOwnPropertyDescriptor(HTMLVideoElement.prototype, 'src');
@@ -42,10 +46,11 @@
       var originalLoad = HTMLMediaElement.prototype.load;
 
       var hlsInstances = new WeakMap();
+      var shakaInstances = new WeakMap();
 
-      // Guard video.load() so Flutter's load() does not abort an active Hls.js MediaSource
+      // Guard video.load() so Flutter's load() does not abort an active MediaSource
       HTMLVideoElement.prototype.load = function() {
-        if (hlsInstances.has(this)) {
+        if (hlsInstances.has(this) || shakaInstances.has(this)) {
           return;
         }
         return originalLoad.call(this);
@@ -55,18 +60,24 @@
         set: function(val) {
           var video = this;
 
-          // 1. If val is a blob: URL, it is Hls.js setting the MediaSource blob on the video element!
-          // We MUST NOT destroy Hls or intercept it.
+          // 1. If val is a blob: URL, it is Hls.js or Shaka setting the MediaSource blob on the video element!
           if (typeof val === 'string' && val.indexOf('blob:') === 0) {
             originalSet.call(video, val);
             return;
           }
 
-          // 2. If changing stream or clearing, destroy previous Hls instance
+          // 2. If changing stream or clearing, destroy previous instances
           var oldHls = hlsInstances.get(video);
           if (oldHls) {
             oldHls.destroy();
             hlsInstances.delete(video);
+            window.prismHls = null;
+          }
+          var oldShaka = shakaInstances.get(video);
+          if (oldShaka) {
+            oldShaka.destroy();
+            shakaInstances.delete(video);
+            window.prismShaka = null;
           }
 
           if (!val) {
@@ -74,11 +85,59 @@
             return;
           }
 
+          var isMpdSource = typeof val === 'string' && (val.indexOf('.mpd') !== -1 || val.indexOf('format=mpd') !== -1);
+          var isHlsSource = typeof val === 'string' && (val.indexOf('.m3u8') !== -1 || val.indexOf('stream-proxy') !== -1);
+
+          // Handle MPEG-DASH with Shaka Player
+          if (isMpdSource && window.shaka && shaka.Player.isBrowserSupported()) {
+            console.log('[PrismTV] Attaching Shaka Player to HTMLVideoElement for DASH stream:', val);
+            var player = new shaka.Player(video);
+            shakaInstances.set(video, player);
+            window.prismShaka = player;
+
+            var drmConfig = {};
+            try {
+              var u = new URL(val, window.location.origin);
+              var chId = u.searchParams.get('channel_id') || '757';
+              var drmKey = u.searchParams.get('drm_key') || '';
+              if (drmKey) {
+                var prefix = window.location.pathname.toLowerCase().indexOf('/prismtv') === 0 ? '/prismTV' : '';
+                drmConfig = {
+                  servers: {
+                    'com.widevine.alpha': prefix + '/api/drm-proxy?channel_id=' + chId + '&url=' + encodeURIComponent(drmKey)
+                  }
+                };
+              }
+            } catch (_) {}
+
+            player.configure({
+              drm: drmConfig,
+              streaming: {
+                bufferingGoal: 8,
+                rebufferingGoal: 2,
+                bufferBehind: 30,
+              }
+            });
+
+            player.load(val).then(function() {
+              console.log('[PrismTV] Shaka manifest parsed. Tracks:', (player.getVariantTracks() || []).map(function(t) { return t.height + 'p'; }));
+              if (window.prismPreferredQualityHeight && window.prismPreferredQualityHeight > 0) {
+                window.prismSetQuality(window.prismPreferredQualityHeight);
+              }
+              video.play().catch(function(e) {
+                console.log('[PrismTV] Autoplay notice:', e);
+              });
+            }).catch(function(err) {
+              console.error('[PrismTV] Shaka load error:', err);
+            });
+            return;
+          }
+
+          // Handle HLS with Hls.js
           var canNativePlay = video.canPlayType('application/vnd.apple.mpegurl');
           var isNativeSupported = canNativePlay === 'probably' || (canNativePlay === 'maybe' && !navigator.userAgent.includes('Chrome') && !navigator.userAgent.includes('Edg'));
-          var isHlsSource = typeof val === 'string' && (val.includes('.m3u8') || val.includes('stream-proxy'));
 
-          if (isHlsSource && !isNativeSupported && Hls.isSupported()) {
+          if (isHlsSource && !isNativeSupported && window.Hls && Hls.isSupported()) {
             console.log('[PrismTV] Attaching Hls.js to HTMLVideoElement for stream:', val);
             var hls = new Hls({
               enableWorker: true,
@@ -137,47 +196,72 @@
         configurable: true,
         enumerable: true,
       });
+
       window.prismSetQuality = function(targetHeight) {
-        if (!window.prismHls) {
-          console.log('[PrismTV] prismSetQuality called but no active Hls instance found.');
-          return false;
-        }
-        if (!targetHeight || targetHeight <= 0) {
-          window.prismHls.currentLevel = -1;
-          console.log('[PrismTV] Quality set to Auto (ABR mode)');
-          return true;
-        }
-
-        var levels = window.prismHls.levels;
-        if (!levels || levels.length === 0) {
-          console.log('[PrismTV] No levels available in manifest yet');
-          return false;
-        }
-
-        var bestIdx = -1;
-        var minDiff = 999999;
-        for (var i = 0; i < levels.length; i++) {
-          var h = levels[i].height;
-          if (h === targetHeight) {
-            bestIdx = i;
-            break;
+        if (window.prismShaka) {
+          var player = window.prismShaka;
+          if (!targetHeight || targetHeight <= 0) {
+            player.configure({ abr: { enabled: true } });
+            console.log('[PrismTV Shaka] Quality set to Auto (ABR mode)');
+            return true;
           }
-          var diff = Math.abs(h - targetHeight);
-          if (diff < minDiff) {
-            minDiff = diff;
-            bestIdx = i;
+          var tracks = player.getVariantTracks() || [];
+          var match = null;
+          var closest = null;
+          var minDiff = 999999;
+          for (var i = 0; i < tracks.length; i++) {
+            var diff = Math.abs((tracks[i].height || 0) - targetHeight);
+            if (diff < minDiff) {
+              minDiff = diff;
+              closest = tracks[i];
+            }
+            if (tracks[i].height === targetHeight) {
+              match = tracks[i];
+              break;
+            }
+          }
+          var selected = match || closest;
+          if (selected) {
+            player.configure({ abr: { enabled: false } });
+            player.selectVariantTrack(selected, true);
+            console.log('[PrismTV Shaka] Locked quality to ' + selected.height + 'p (' + Math.round(selected.bandwidth / 1000) + 'kbps)');
+            return true;
           }
         }
 
-        if (bestIdx !== -1) {
-          window.prismHls.currentLevel = bestIdx;
-          console.log('[PrismTV] Switched Hls level to index', bestIdx, 'height:', levels[bestIdx].height);
-          return true;
+        if (window.prismHls) {
+          var hls = window.prismHls;
+          if (!targetHeight || targetHeight <= 0) {
+            hls.currentLevel = -1;
+            console.log('[PrismTV Hls] Quality set to Auto (ABR mode)');
+            return true;
+          }
+          var levels = hls.levels || [];
+          var bestIdx = -1;
+          var minDiff = 999999;
+          for (var i = 0; i < levels.length; i++) {
+            var h = levels[i].height;
+            if (h === targetHeight) {
+              bestIdx = i;
+              break;
+            }
+            var diff = Math.abs((h || 0) - targetHeight);
+            if (diff < minDiff) {
+              minDiff = diff;
+              bestIdx = i;
+            }
+          }
+          if (bestIdx !== -1) {
+            hls.currentLevel = bestIdx;
+            console.log('[PrismTV Hls] Locked quality to level ' + bestIdx + ' (' + (levels[bestIdx] ? levels[bestIdx].height : targetHeight) + 'p)');
+            return true;
+          }
         }
+
         return false;
       };
 
-      console.log('[PrismTV] Hls.js Media Source bridge loaded.');
+      console.log('[PrismTV] Hls.js & Shaka Player Media Source bridges loaded.');
     })();
   </script>
 

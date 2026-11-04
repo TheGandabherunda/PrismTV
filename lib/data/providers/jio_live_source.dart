@@ -174,6 +174,9 @@ class JioLiveSource implements ILiveTvSource {
           return model;
         }).toList();
 
+        // Remove duplicate SD alias of Colors Kannada (channel 1370) so the catalog is clean and has only 1 Colors Kannada HD
+        channels.removeWhere((c) => c.channelId == 1370);
+
         // Sort: Favorites first, then Kannada channels, then others
         channels.sort((a, b) {
           if (a.isFavorite && !b.isFavorite) return -1;
@@ -252,12 +255,20 @@ class JioLiveSource implements ILiveTvSource {
       final beginStr = '$yyyy$mm${dd}T$hh$mi$ss';
       final srnoStr = '$yyyy$mm$dd';
 
-      final formBody = 'channel_id=${channel.channelId}&stream_type=Seek&begin=$beginStr&srno=$srnoStr';
+      // Jio origin mapping:
+      // Channel 757 ("Colors Kannada HD") mobile HLS feed is capped at 360p,
+      // while channel 1370 ("Colors_Kannada_SD_MOB", marked isHD: true) broadcasts the full 1080p 2.8 Mbps stream.
+      int effectiveChannelId = channel.channelId;
+      if (channel.channelId == 757) {
+        effectiveChannelId = 1370;
+      }
+
+      final formBody = 'channel_id=$effectiveChannelId&stream_type=Seek&begin=$beginStr&srno=$srnoStr';
 
       final requestHeaders = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'appkey': 'NzNiMDhlYzQyNjJm',
-        'channel_id': channel.channelId.toString(),
+        'channel_id': effectiveChannelId.toString(),
         'crmid': session.crmid,
         'userId': session.crmid,
         'subscriberId': session.crmid,
@@ -316,7 +327,7 @@ class JioLiveSource implements ILiveTvSource {
             'accesstoken': session.accessToken,
             'crmid': session.crmid,
             'uniqueid': session.uniqueId,
-            'channel_id': channel.channelId.toString(),
+            'channel_id': effectiveChannelId.toString(),
           };
           final queryString = queryParams.entries
               .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
