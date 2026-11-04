@@ -3,9 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
+import '../../core/services/quality_bridge.dart';
 import '../../data/models/channel_model.dart';
 import '../../data/models/epg_program_model.dart';
+import '../../data/models/quality_option.dart';
 import '../../data/repositories/channel_repository.dart';
+import 'widgets/resolution_dialog.dart';
 
 class PlayerController extends GetxController {
   final ChannelRepository _channelRepo = Get.find<ChannelRepository>();
@@ -18,16 +21,22 @@ class PlayerController extends GetxController {
   final RxBool isBuffering = true.obs;
   final RxBool isPlaying = false.obs;
   final RxString streamError = ''.obs;
+  final RxString toastMessage = ''.obs;
 
   // EPG
   final Rxn<EpgProgramModel> currentProgram = Rxn<EpgProgramModel>();
 
-  // TV OSD (On-Screen Display) Controls
+  // TV OSD Controls & Resolution
   final RxBool showOsd = true.obs;
   final RxBool showQuickGuide = false.obs;
-  final RxString selectedQuality = 'Auto (1080p)'.obs;
+  final Rx<QualityOption> selectedQualityOption = QualityOption.defaultOptions.first.obs;
+  final RxString selectedQuality = 'Auto'.obs;
 
   Timer? _osdTimer;
+  Timer? _toastTimer;
+
+  String _baseStreamUrl = '';
+  Map<String, String> _playbackHeaders = {};
 
   @override
   void onInit() {
@@ -43,6 +52,7 @@ class PlayerController extends GetxController {
   @override
   void onClose() {
     _osdTimer?.cancel();
+    _toastTimer?.cancel();
     videoPlayerController?.dispose();
     super.onClose();
   }
@@ -62,11 +72,14 @@ class PlayerController extends GetxController {
 
     try {
       final playbackInfo = await _channelRepo.getStream(channel);
+      _baseStreamUrl = playbackInfo.streamUrl;
+      _playbackHeaders = playbackInfo.headers;
 
-      final uri = Uri.parse(playbackInfo.streamUrl);
+      final targetUrl = _buildStreamUrlForQuality(selectedQualityOption.value);
+      final uri = Uri.parse(targetUrl);
       videoPlayerController = VideoPlayerController.networkUrl(
         uri,
-        httpHeaders: playbackInfo.headers,
+        httpHeaders: _playbackHeaders,
       );
 
       await videoPlayerController!.initialize();
@@ -76,6 +89,13 @@ class PlayerController extends GetxController {
       isPlayerInitialized.value = true;
       isPlaying.value = true;
       isBuffering.value = false;
+
+      // On Web, sync Hls.js quality level if non-auto was previously chosen
+      if (selectedQualityOption.value.targetHeight > 0) {
+        Future.delayed(const Duration(milliseconds: 600), () {
+          switchWebQuality(selectedQualityOption.value.targetHeight);
+        });
+      }
     } catch (e) {
       debugPrint('[PRISM_PLAYER_ERROR] $e');
       if (e.toString().contains('Authentication') || e.toString().contains('419') || e.toString().contains('401')) {
@@ -85,6 +105,79 @@ class PlayerController extends GetxController {
       }
       isBuffering.value = false;
     }
+  }
+
+  String _buildStreamUrlForQuality(QualityOption quality) {
+    if (_baseStreamUrl.isEmpty) return '';
+    if (quality.id == 'auto') return _baseStreamUrl;
+
+    // Apply bitrate bounds into stream URL
+    var url = _baseStreamUrl;
+    if (url.contains('minrate=') && url.contains('maxrate=')) {
+      url = url.replaceAll(RegExp(r'minrate=\d+'), 'minrate=${quality.minRate}');
+      url = url.replaceAll(RegExp(r'maxrate=\d+'), 'maxrate=${quality.maxRate}');
+    } else {
+      final sep = url.contains('?') ? '&' : '?';
+      url = '$url${sep}minrate=${quality.minRate}&maxrate=${quality.maxRate}';
+    }
+    return url;
+  }
+
+  Future<void> changeQuality(QualityOption option) async {
+    selectedQualityOption.value = option;
+    selectedQuality.value = option.id == 'auto' ? 'Auto' : '${option.targetHeight}p';
+
+    // 1. Attempt instantaneous Hls.js level switch on Web
+    final switchedOnWeb = switchWebQuality(option.targetHeight);
+    if (switchedOnWeb) {
+      _showToast('Resolution changed to ${option.label}');
+      return;
+    }
+
+    // 2. Otherwise update stream URL and reload video controller
+    if (_baseStreamUrl.isNotEmpty) {
+      isBuffering.value = true;
+      try {
+        final targetUrl = _buildStreamUrlForQuality(option);
+        final uri = Uri.parse(targetUrl);
+
+        final oldController = videoPlayerController;
+        final newController = VideoPlayerController.networkUrl(
+          uri,
+          httpHeaders: _playbackHeaders,
+        );
+
+        await newController.initialize();
+        newController.addListener(_videoListener);
+        await newController.play();
+
+        videoPlayerController = newController;
+        await oldController?.dispose();
+
+        isBuffering.value = false;
+        _showToast('Resolution changed to ${option.label}');
+      } catch (e) {
+        debugPrint('[QUALITY_CHANGE_ERROR] $e');
+        isBuffering.value = false;
+      }
+    }
+  }
+
+  void openQualitySelector() {
+    Get.dialog(
+      ResolutionDialog(controller: this),
+      barrierColor: const Color(0x99000000),
+    );
+  }
+
+  void _showToast(String message) {
+    toastMessage.value = message;
+    _toastTimer?.cancel();
+    _toastTimer = Timer(const Duration(seconds: 3), () {
+      if (toastMessage.value == message) {
+        toastMessage.value = '';
+      }
+    });
   }
 
   void _videoListener() {
@@ -101,6 +194,8 @@ class PlayerController extends GetxController {
           (p) => p.isNowPlaying,
           orElse: () => epg.first,
         );
+      } else {
+        currentProgram.value = null;
       }
     } catch (_) {
       currentProgram.value = null;
@@ -180,6 +275,9 @@ class PlayerController extends GetxController {
       } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
         toggleQuickGuide();
         return KeyEventResult.handled;
+      } else if (event.logicalKey == LogicalKeyboardKey.keyQ) {
+        openQualitySelector();
+        return KeyEventResult.handled;
       } else if (event.logicalKey == LogicalKeyboardKey.select ||
           event.logicalKey == LogicalKeyboardKey.enter ||
           event.logicalKey == LogicalKeyboardKey.space) {
@@ -192,4 +290,3 @@ class PlayerController extends GetxController {
     return KeyEventResult.ignored;
   }
 }
-

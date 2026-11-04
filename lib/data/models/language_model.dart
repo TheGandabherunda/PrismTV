@@ -31,3 +31,4 @@ class LanguageModel {
     LanguageModel(id: 'assamese', title: 'Assamese', nativeTitle: 'অসমীয়া', jioLanguageId: 12),
   ];
 }
+

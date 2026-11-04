@@ -87,12 +87,60 @@ class PlayerView extends GetView<PlayerController> {
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                         decoration: BoxDecoration(
-                          color: AppColors.accent.withValues(alpha: 0.9),
+                          color: AppColors.secondary.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
                           controller.streamError.value,
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }),
+                ),
+              ),
+
+              // Quality / Action Toast Notification
+              Positioned(
+                top: 80,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Obx(() {
+                    if (controller.toastMessage.value.isNotEmpty) {
+                      return AnimatedOpacity(
+                        opacity: controller.toastMessage.value.isNotEmpty ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface.withValues(alpha: 0.92),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: AppColors.primaryLight, width: 1.2),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: AppColors.primaryGlow,
+                                blurRadius: 16,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.tune_rounded, size: 16, color: AppColors.primaryLight),
+                              const SizedBox(width: 8),
+                              Text(
+                                controller.toastMessage.value,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     }

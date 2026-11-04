@@ -90,19 +90,77 @@ class OsdOverlay extends StatelessWidget {
                 ],
               ),
 
-              // Live Status & Clock
+              // Resolution, Live Status & Clock
               Row(
                 children: [
+                  // Resolution Pill Selector Button
+                  Focus(
+                    child: Builder(
+                      builder: (ctx) {
+                        final hasFocus = Focus.of(ctx).hasFocus;
+                        return InkWell(
+                          onTap: () => controller.openQualitySelector(),
+                          borderRadius: BorderRadius.circular(10),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: hasFocus ? AppColors.focusedBackground : AppColors.surfaceElevated,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: hasFocus ? AppColors.primary : AppColors.unfocusedBorder,
+                                width: hasFocus ? 1.5 : 1,
+                              ),
+                              boxShadow: hasFocus
+                                  ? const [
+                                      BoxShadow(
+                                        color: AppColors.primaryGlow,
+                                        blurRadius: 12,
+                                        spreadRadius: 1,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.tune_rounded,
+                                  size: 14,
+                                  color: AppColors.primaryLight,
+                                ),
+                                const SizedBox(width: 6),
+                                Obx(
+                                  () => Text(
+                                    controller.selectedQuality.value,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: hasFocus ? Colors.white : AppColors.textPrimary,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+
+                  // Live Status Badge
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.2),
+                      color: AppColors.liveRed.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: AppColors.accent),
+                      border: Border.all(color: AppColors.liveRed.withValues(alpha: 0.6)),
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.circle, color: AppColors.accent, size: 8),
+                        Icon(Icons.circle, color: AppColors.liveRed, size: 8),
                         SizedBox(width: 6),
                         Text(
                           'LIVE STREAM',
@@ -110,17 +168,17 @@ class OsdOverlay extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.2,
-                            color: AppColors.accent,
+                            color: AppColors.liveRed,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 20),
+                  const SizedBox(width: 16),
                   Text(
                     currentTime,
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.5,
                       color: AppColors.textPrimary,
@@ -280,7 +338,7 @@ class OsdOverlay extends StatelessWidget {
                     const Row(
                       children: [
                         Text(
-                          '▲/▼ Channel  •  ◀ Quick Guide  •  [OK] Play/Pause',
+                          '▲/▼ Channel  •  ◀ Quick Guide  •  [Q] Resolution  •  [OK] Play/Pause',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w500,

@@ -88,12 +88,13 @@
               maxMaxBufferLength: 60,
             });
             hlsInstances.set(video, hls);
+            window.prismHls = hls;
 
             hls.loadSource(val);
             hls.attachMedia(video);
 
             hls.on(Hls.Events.MANIFEST_PARSED, function() {
-              console.log('[PrismTV] Hls manifest parsed successfully. Starting playback...');
+              console.log('[PrismTV] Hls manifest parsed successfully. Available levels:', (hls.levels || []).map(function(l) { return l.height + 'p'; }));
               video.play().catch(function(e) {
                 console.log('[PrismTV] Autoplay notice:', e);
               });
@@ -128,6 +129,46 @@
         configurable: true,
         enumerable: true,
       });
+      window.prismSetQuality = function(targetHeight) {
+        if (!window.prismHls) {
+          console.log('[PrismTV] prismSetQuality called but no active Hls instance found.');
+          return false;
+        }
+        if (!targetHeight || targetHeight <= 0) {
+          window.prismHls.currentLevel = -1;
+          console.log('[PrismTV] Quality set to Auto (ABR mode)');
+          return true;
+        }
+
+        var levels = window.prismHls.levels;
+        if (!levels || levels.length === 0) {
+          console.log('[PrismTV] No levels available in manifest yet');
+          return false;
+        }
+
+        var bestIdx = -1;
+        var minDiff = 999999;
+        for (var i = 0; i < levels.length; i++) {
+          var h = levels[i].height;
+          if (h === targetHeight) {
+            bestIdx = i;
+            break;
+          }
+          var diff = Math.abs(h - targetHeight);
+          if (diff < minDiff) {
+            minDiff = diff;
+            bestIdx = i;
+          }
+        }
+
+        if (bestIdx !== -1) {
+          window.prismHls.currentLevel = bestIdx;
+          console.log('[PrismTV] Switched Hls level to index', bestIdx, 'height:', levels[bestIdx].height);
+          return true;
+        }
+        return false;
+      };
+
       console.log('[PrismTV] Hls.js Media Source bridge loaded.');
     })();
   </script>

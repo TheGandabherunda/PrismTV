@@ -4,6 +4,7 @@ import 'package:prism_tv/data/models/category_model.dart';
 import 'package:prism_tv/data/models/channel_model.dart';
 import 'package:prism_tv/data/models/epg_program_model.dart';
 import 'package:prism_tv/data/models/language_model.dart';
+import 'package:prism_tv/data/models/quality_option.dart';
 
 void main() {
   group('PrismTV Core Models & Architecture Tests', () {
@@ -76,6 +77,17 @@ void main() {
       expect(categories.any((c) => c.id == 'entertainment'), isTrue);
       expect(categories.any((c) => c.id == 'sports'), isTrue);
       expect(categories.any((c) => c.id == 'movies'), isTrue);
+    });
+
+    test('QualityOption includes Auto, 1080p, 720p, 480p, 360p, and 240p', () {
+      final options = QualityOption.defaultOptions;
+
+      expect(options.any((o) => o.id == 'auto'), isTrue);
+      expect(options.any((o) => o.id == '1080p' && o.targetHeight == 1080), isTrue);
+      expect(options.any((o) => o.id == '720p' && o.targetHeight == 720), isTrue);
+      expect(options.any((o) => o.id == '480p' && o.targetHeight == 480), isTrue);
+      expect(options.any((o) => o.id == '360p' && o.targetHeight == 360), isTrue);
+      expect(options.any((o) => o.id == '240p' && o.targetHeight == 240), isTrue);
     });
   });
 }
