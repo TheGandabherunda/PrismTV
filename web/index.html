@@ -99,13 +99,8 @@
             hls.on(Hls.Events.MANIFEST_PARSED, function() {
               console.log('[PrismTV] Hls manifest parsed. Levels:', (hls.levels || []).map(function(l) { return l.height + 'p (' + Math.round(l.bitrate / 1000) + 'kbps)'; }));
               
-              // Automatically switch to highest available HD level (1080p/720p) unless user chose a specific quality
               if (window.prismPreferredQualityHeight && window.prismPreferredQualityHeight > 0) {
                 window.prismSetQuality(window.prismPreferredQualityHeight);
-              } else if (hls.levels && hls.levels.length > 0) {
-                var topLevel = hls.levels.length - 1;
-                hls.currentLevel = topLevel;
-                console.log('[PrismTV] Auto-selected highest HD stream level:', hls.levels[topLevel].height + 'p');
               }
 
               video.play().catch(function(e) {

@@ -100,15 +100,12 @@ class PlayerController extends GetxController {
       isPlaying.value = true;
       isBuffering.value = false;
 
-      // On Web, sync Hls.js quality level: if non-auto or if channel is HD, request high resolution!
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (selectedQualityOption.value.targetHeight > 0) {
+      // On Web, sync Hls.js quality level if non-auto was chosen
+      if (selectedQualityOption.value.targetHeight > 0) {
+        Future.delayed(const Duration(milliseconds: 500), () {
           switchWebQuality(selectedQualityOption.value.targetHeight);
-        } else if (channel.isHd) {
-          // HD channel in Auto mode: command HLS engine to load 1080p/720p immediately
-          switchWebQuality(1080);
-        }
-      });
+        });
+      }
     } catch (e) {
       debugPrint('[PRISM_PLAYER_ERROR] $e');
       if (e.toString().contains('Authentication') || e.toString().contains('419') || e.toString().contains('401')) {

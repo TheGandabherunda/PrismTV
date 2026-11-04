@@ -288,13 +288,12 @@ class JioLiveSource implements ILiveTvSource {
         final data = jsonDecode(response.body);
         final bitrates = data['bitrates'] as Map<String, dynamic>?;
 
-        String rawStreamUrl = '';
-        if (channel.isHd && bitrates != null) {
-          rawStreamUrl = bitrates['high'] ?? bitrates['auto'] ?? data['result'] ?? '';
-        } else if (bitrates != null) {
-          rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? data['result'] ?? '';
-        } else {
-          rawStreamUrl = data['result'] ?? '';
+        // Use the complete master manifest (result / auto) which contains all video tracks.
+        // Never use bitrates['high'] directly because on several entertainment/regional feeds
+        // it filters out all video variants, resulting in a black screen (audio-only).
+        String rawStreamUrl = data['result'] ?? '';
+        if (rawStreamUrl.isEmpty && bitrates != null) {
+          rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? '';
         }
 
         if (rawStreamUrl.isNotEmpty) {
