@@ -64,12 +64,16 @@ const server = http.createServer((req, res) => {
 
       if (hdneaToken) {
         outgoingHeaders['Cookie'] = `__hdnea__=${hdneaToken}`;
+      } else if (req.headers['cookie']) {
+        outgoingHeaders['Cookie'] = req.headers['cookie'];
       }
 
       const proxyReq = client.request(targetUrl, {
         method: req.method,
         headers: outgoingHeaders,
       }, (proxyRes) => {
+        console.log(`[STREAM PROXY] ${proxyRes.statusCode} <- ${targetUrl.split('?')[0]}`);
+
         // Check for redirect (302/301)
         if (proxyRes.statusCode >= 300 && proxyRes.statusCode < 400 && proxyRes.headers.location) {
           const redirectUrl = new URL(proxyRes.headers.location, targetUrl).toString();
@@ -90,7 +94,7 @@ const server = http.createServer((req, res) => {
           proxyRes.on('data', chunk => body += chunk);
           proxyRes.on('end', () => {
             const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
-            const parentSearch = u.search; // Contains ?hdnea=...
+            const parentSearch = u.search; // Contains ?minrate=...&__hdnea__=...
 
             const lines = body.split('\n');
             const rewritten = lines.map(line => {
@@ -121,21 +125,27 @@ const server = http.createServer((req, res) => {
               return `/api/stream-proxy?url=${encodeURIComponent(fullSegmentUrl)}`;
             }).join('\n');
 
-            res.writeHead(proxyRes.statusCode, {
+            const respHeaders = {
               'Content-Type': 'application/vnd.apple.mpegurl',
               'Access-Control-Allow-Origin': '*',
               'Access-Control-Allow-Methods': 'GET, OPTIONS',
               'Cache-Control': 'no-cache',
-            });
+            };
+            if (proxyRes.headers['set-cookie']) {
+              respHeaders['Set-Cookie'] = proxyRes.headers['set-cookie'];
+            }
+
+            res.writeHead(proxyRes.statusCode, respHeaders);
             res.end(rewritten);
           });
         } else {
           // Binary video segments (.ts, .m4s)
-          res.writeHead(proxyRes.statusCode, {
+          const respHeaders = {
             ...proxyRes.headers,
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, OPTIONS',
-          });
+          };
+          res.writeHead(proxyRes.statusCode, respHeaders);
           proxyRes.pipe(res);
         }
       });

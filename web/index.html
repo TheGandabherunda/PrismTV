@@ -27,12 +27,30 @@
                             Object.getOwnPropertyDescriptor(HTMLVideoElement.prototype, 'src');
       var originalSet = originalSrcDesc ? originalSrcDesc.set : function(v) { this.setAttribute('src', v); };
       var originalGet = originalSrcDesc ? originalSrcDesc.get : function() { return this.getAttribute('src'); };
+      var originalLoad = HTMLMediaElement.prototype.load;
 
       var hlsInstances = new WeakMap();
+
+      // Guard video.load() so Flutter's load() does not abort an active Hls.js MediaSource
+      HTMLVideoElement.prototype.load = function() {
+        if (hlsInstances.has(this)) {
+          return;
+        }
+        return originalLoad.call(this);
+      };
 
       Object.defineProperty(HTMLVideoElement.prototype, 'src', {
         set: function(val) {
           var video = this;
+
+          // 1. If val is a blob: URL, it is Hls.js setting the MediaSource blob on the video element!
+          // We MUST NOT destroy Hls or intercept it.
+          if (typeof val === 'string' && val.indexOf('blob:') === 0) {
+            originalSet.call(video, val);
+            return;
+          }
+
+          // 2. If changing stream or clearing, destroy previous Hls instance
           var oldHls = hlsInstances.get(video);
           if (oldHls) {
             oldHls.destroy();
@@ -59,24 +77,31 @@
             });
             hlsInstances.set(video, hls);
 
+            hls.loadSource(val);
             hls.attachMedia(video);
-            hls.on(Hls.Events.MEDIA_ATTACHED, function() {
-              hls.loadSource(val);
+
+            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+              console.log('[PrismTV] Hls manifest parsed successfully. Starting playback...');
+              video.play().catch(function(e) {
+                console.log('[PrismTV] Autoplay notice:', e);
+              });
             });
+
             hls.on(Hls.Events.ERROR, function(event, data) {
               if (data.fatal) {
                 switch(data.type) {
                   case Hls.ErrorTypes.NETWORK_ERROR:
-                    console.warn('[PrismTV Hls Network Error] Recovering...', data);
+                    console.warn('[PrismTV Hls Network Error] Recovering...', data.details);
                     hls.startLoad();
                     break;
                   case Hls.ErrorTypes.MEDIA_ERROR:
-                    console.warn('[PrismTV Hls Media Error] Recovering...', data);
+                    console.warn('[PrismTV Hls Media Error] Recovering...', data.details);
                     hls.recoverMediaError();
                     break;
                   default:
-                    console.error('[PrismTV Hls Fatal Error]', data);
+                    console.error('[PrismTV Hls Fatal Error]', data.details);
                     hls.destroy();
+                    hlsInstances.delete(video);
                     break;
                 }
               }
