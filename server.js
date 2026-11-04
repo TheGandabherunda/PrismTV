@@ -158,7 +158,19 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 1.5 Widevine DRM License Proxy
+function generateDateTime() {
+  const d = new Date();
+  const pad = (n, l=2) => String(n).padStart(l, '0');
+  const yy = pad(d.getUTCFullYear() % 100);
+  const mm = pad(d.getUTCMonth() + 1);
+  const dd = pad(d.getUTCDate());
+  const hh = pad(d.getUTCHours());
+  const mi = pad(d.getUTCMinutes());
+  const ms = pad(d.getUTCMilliseconds(), 3);
+  return `${yy}${mm}${dd}${hh}${mi}${ms}`;
+}
+
+// 1.5 Widevine DRM License Proxy
   if (req.url.startsWith('/api/drm-proxy')) {
     const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const targetUrl = parsedUrl.searchParams.get('url');
@@ -179,10 +191,6 @@ const server = http.createServer((req, res) => {
       const isHttps = u.protocol === 'https:';
       const client = isHttps ? https : http;
 
-      const now = new Date();
-      const pad = n => String(n).padStart(2, '0');
-      const srnoStr = now.getUTCFullYear() + pad(now.getUTCMonth()+1) + pad(now.getUTCDate());
-
       const activeSso = currentSession.ssoToken;
       const activeAccess = currentSession.accessToken;
       const activeCrm = currentSession.crmid;
@@ -191,46 +199,39 @@ const server = http.createServer((req, res) => {
 
       const outgoingHeaders = {
         'Content-Type': 'application/octet-stream',
-        'appkey': 'NzNiMDhlYzQyNjJm',
-        'channelid': channelId,
-        'channel_id': channelId,
-        'crmid': activeCrm,
-        'userId': activeCrm,
-        'subscriberId': activeCrm,
-        'uniqueid': activeUnique,
-        'uniqueId': activeUnique,
-        'deviceid': activeDeviceId,
-        'deviceId': activeDeviceId,
-        'devicetype': 'phone',
-        'isott': 'false',
-        'languageId': '6',
-        'lbcookie': '1',
-        'os': 'android',
-        'osVersion': '13',
-        'usergroup': 'tvYR7NSNn7rymo3F',
         'User-Agent': 'plaYtv/7.1.8 (Linux;Android 8.1.0) ExoPlayerLib/2.11.7',
-        'versioncode': '422',
-        'versionCode': '422',
-        'accesstoken': activeAccess,
-        'accessToken': activeAccess,
+        'Connection': 'keep-alive',
+        'os': 'android',
+        'appName': 'RJIL_JioTV',
+        'subscriberId': activeCrm,
         'ssotoken': activeSso,
-        'ssoToken': activeSso,
-        'srno': srnoStr,
+        'x-platform': 'android',
+        'srno': generateDateTime(),
+        'crmid': activeCrm,
+        'channelid': String(channelId),
+        'uniqueId': activeUnique,
+        'versionCode': '422',
+        'usergroup': 'tvYR7NSNn7rymo3F',
+        'devicetype': 'phone',
+        'Accept-Encoding': 'gzip, deflate',
+        'osVersion': '13',
+        'deviceId': activeDeviceId,
+        'accesstoken': activeAccess,
         'Content-Length': challengeBuf.length,
       };
 
-      const hdneaToken = u.searchParams.get('hdnea') || u.searchParams.get('__hdnea__') || activeHdneaTokens.get(channelId) || '';
+      const hdneaToken = u.searchParams.get('hdnea') || u.searchParams.get('__hdnea__') || activeHdneaTokens.get(channelId) || activeHdneaTokens.get(u.hostname) || '';
       if (hdneaToken) {
         outgoingHeaders['Cookie'] = `__hdnea__=${hdneaToken}`;
       }
 
-      console.log(`[DRM PROXY] Forwarding ${challengeBuf.length} byte Widevine challenge for ch=${channelId}`);
+      console.log(`[DRM PROXY] Forwarding ${challengeBuf.length} byte Widevine challenge for ch=${channelId} to Jio License Server`);
 
       const proxyReq = client.request(targetUrl, {
         method: 'POST',
         headers: outgoingHeaders,
       }, (proxyRes) => {
-        console.log(`[DRM PROXY] Jio License response status: ${proxyRes.statusCode}`);
+        console.log(`[DRM PROXY] Jio License response status: ${proxyRes.statusCode} (${proxyRes.headers['content-length'] || 0} bytes)`);
         res.writeHead(proxyRes.statusCode, {
           'Content-Type': 'application/octet-stream',
           'Access-Control-Allow-Origin': '*',
@@ -254,9 +255,40 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 1.6 DASH Clock Sync (UTCTiming)
+  if (req.url === '/api/dashtime' || req.url === '/dashtime') {
+    res.writeHead(200, {
+      'Content-Type': 'text/plain',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'no-cache',
+    });
+    res.end(new Date().toISOString());
+    return;
+  }
+
   // 1.8 Stream Proxy (Raw Path-Based for DASH segments)
   if (req.url.startsWith('/api/stream-proxy/raw/')) {
-    const rawPath = req.url.substring('/api/stream-proxy/raw/'.length);
+    let rawPath = req.url.substring('/api/stream-proxy/raw/'.length);
+    let embeddedHdnea = '';
+    let embeddedChannelId = '';
+
+    if (rawPath.startsWith('hdnea/')) {
+      rawPath = rawPath.substring('hdnea/'.length);
+      const nextSlash = rawPath.indexOf('/');
+      if (nextSlash !== -1) {
+        embeddedHdnea = decodeURIComponent(rawPath.substring(0, nextSlash));
+        rawPath = rawPath.substring(nextSlash + 1);
+      }
+    }
+    if (rawPath.startsWith('ch/')) {
+      rawPath = rawPath.substring('ch/'.length);
+      const nextSlash = rawPath.indexOf('/');
+      if (nextSlash !== -1) {
+        embeddedChannelId = rawPath.substring(0, nextSlash);
+        rawPath = rawPath.substring(nextSlash + 1);
+      }
+    }
+
     const slashIdx = rawPath.indexOf('/');
     const proto = rawPath.substring(0, slashIdx);
     const rest = rawPath.substring(slashIdx + 1);
@@ -267,7 +299,8 @@ const server = http.createServer((req, res) => {
       const isHttps = u.protocol === 'https:';
       const client = isHttps ? https : http;
 
-      const hdneaToken = u.searchParams.get('hdnea') || u.searchParams.get('__hdnea__') || activeHdneaTokens.get(u.hostname) || '';
+      const channelId = embeddedChannelId || (targetUrl.includes('Colors_Kannada') ? '757' : '757');
+      const hdneaToken = embeddedHdnea || u.searchParams.get('hdnea') || u.searchParams.get('__hdnea__') || activeHdneaTokens.get(channelId) || activeHdneaTokens.get(u.hostname) || '';
 
       const outgoingHeaders = {
         'User-Agent': 'plaYtv/7.1.8 (Linux;Android 8.1.0) ExoPlayerLib/2.11.7',
@@ -281,28 +314,49 @@ const server = http.createServer((req, res) => {
         outgoingHeaders['Cookie'] = `__hdnea__=${hdneaToken}`;
       }
 
-      const proxyReq = client.request(targetUrl, {
-        method: req.method,
-        headers: outgoingHeaders,
-      }, (proxyRes) => {
-        console.log(`[STREAM RAW] ${proxyRes.statusCode} <- ${targetUrl.split('?')[0]} (Cookie: ${outgoingHeaders['Cookie'] ? 'YES' : 'NO'})`);
-        const respHeaders = {
-          ...proxyRes.headers,
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, OPTIONS',
-          'Access-Control-Expose-Headers': '*',
-        };
-        res.writeHead(proxyRes.statusCode, respHeaders);
-        proxyRes.pipe(res);
-      });
+      const executeRawRequest = (tokenOverride) => {
+        if (tokenOverride) {
+          outgoingHeaders['Cookie'] = `__hdnea__=${tokenOverride}`;
+        }
 
-      proxyReq.on('error', (err) => {
-        console.error('[STREAM RAW ERROR]', err.message);
-        res.writeHead(502, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
-        res.end('Raw Stream Error: ' + err.message);
-      });
+        const proxyReq = client.request(targetUrl, {
+          method: req.method,
+          headers: outgoingHeaders,
+        }, (proxyRes) => {
+          if (proxyRes.statusCode === 403 && !tokenOverride) {
+            console.log(`[STREAM RAW] 403 for ${targetUrl.split('?')[0]}. Refreshing token for channel ${channelId}...`);
+            refreshChannelHdnea(channelId, (err, freshToken) => {
+              if (!err && freshToken) {
+                executeRawRequest(freshToken);
+                return;
+              }
+              res.writeHead(403, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
+              res.end('Access Denied');
+            });
+            return;
+          }
 
-      proxyReq.end();
+          console.log(`[STREAM RAW] ${proxyRes.statusCode} <- ${targetUrl.split('?')[0]} (Cookie: ${outgoingHeaders['Cookie'] ? 'YES' : 'NO'})`);
+          const respHeaders = {
+            ...proxyRes.headers,
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Expose-Headers': '*',
+          };
+          res.writeHead(proxyRes.statusCode, respHeaders);
+          proxyRes.pipe(res);
+        });
+
+        proxyReq.on('error', (err) => {
+          console.error('[STREAM RAW ERROR]', err.message);
+          res.writeHead(502, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
+          res.end('Raw Stream Error: ' + err.message);
+        });
+
+        proxyReq.end();
+      };
+
+      executeRawRequest(null);
       return;
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
@@ -452,12 +506,18 @@ const server = http.createServer((req, res) => {
           proxyRes.on('data', chunk => body += chunk);
           proxyRes.on('end', () => {
             const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
-            const rewritten = body.replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (match, rel) => {
+            let rewritten = body.replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (match, rel) => {
               const fullBase = new URL(rel, baseUrl).toString();
               const noProto = fullBase.replace(/^https?:\/\//, '');
-              const proxyBase = `${streamProxyPath}/raw/${fullBase.startsWith('https') ? 'https' : 'http'}/${noProto}`;
+              const hdneaPart = effectiveHdnea ? `hdnea/${encodeURIComponent(effectiveHdnea)}/` : '';
+              const chPart = activeChannelId ? `ch/${activeChannelId}/` : '';
+              const proxyBase = `${streamProxyPath}/raw/${hdneaPart}${chPart}${fullBase.startsWith('https') ? 'https' : 'http'}/${noProto}`;
               return `<BaseURL>${proxyBase}</BaseURL>`;
             });
+
+            if (!rewritten.includes('<UTCTiming')) {
+              rewritten = rewritten.replace(/<MPD([^>]*)>/, `<MPD$1><UTCTiming schemeIdUri="urn:mpeg:dash:utc:http-xsdate:2014" value="/api/dashtime"/>`);
+            }
 
             const respHeaders = {
               'Content-Type': 'application/dash+xml',

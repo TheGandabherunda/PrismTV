@@ -267,14 +267,7 @@ class JioLiveSource implements ILiveTvSource {
       final beginStr = '$yyyy$mm${dd}T$hh$mi$ss';
       final srnoStr = '$yyyy$mm$dd';
 
-      // Jio origin mapping:
-      // Channel 757 ("Colors Kannada HD") mobile HLS feed is capped at 360p,
-      // while channel 1370 ("Colors_Kannada_SD_MOB", marked isHD: true) broadcasts the full 1080p 2.8 Mbps stream.
-      int effectiveChannelId = channel.channelId;
-      if (channel.channelId == 757) {
-        effectiveChannelId = 1370;
-      }
-
+      final effectiveChannelId = channel.channelId;
       final formBody = 'channel_id=$effectiveChannelId&stream_type=Seek&begin=$beginStr&srno=$srnoStr';
 
       final requestHeaders = {
@@ -310,13 +303,21 @@ class JioLiveSource implements ILiveTvSource {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final bitrates = data['bitrates'] as Map<String, dynamic>?;
+        final mpd = data['mpd'] as Map<String, dynamic>?;
 
-        // Use the complete master manifest (result / auto) which contains all video tracks.
-        // Never use bitrates['high'] directly because on several entertainment/regional feeds
-        // it filters out all video variants, resulting in a black screen (audio-only).
-        String rawStreamUrl = data['result'] ?? '';
-        if (rawStreamUrl.isEmpty && bitrates != null) {
-          rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? '';
+        // MPEG-DASH (Widevine DRM) contains the authentic 1080p full HD studio broadcasts
+        // (1920x1080 at 2.3+ Mbps AVC High Profile), whereas HLS mobile feeds are capped by Jio at 360p.
+        String rawStreamUrl = '';
+        String drmLicenseUrl = '';
+
+        if (mpd != null && mpd['result'] != null && (mpd['result'] as String).isNotEmpty) {
+          rawStreamUrl = mpd['result'] as String;
+          drmLicenseUrl = (mpd['key'] as String?) ?? '';
+        } else {
+          rawStreamUrl = data['result'] ?? '';
+          if (rawStreamUrl.isEmpty && bitrates != null) {
+            rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? '';
+          }
         }
 
         if (rawStreamUrl.isNotEmpty) {
@@ -335,6 +336,7 @@ class JioLiveSource implements ILiveTvSource {
           // On Web, route through local stream proxy to bypass browser CORS and deliver authentication
           final queryParams = <String, String>{
             'url': rawStreamUrl,
+            if (drmLicenseUrl.isNotEmpty) 'drm_key': drmLicenseUrl,
             'ssotoken': session.ssoToken,
             'accesstoken': session.accessToken,
             'crmid': session.crmid,
@@ -350,6 +352,8 @@ class JioLiveSource implements ILiveTvSource {
               ? '${ApiEndpoints.streamProxyUrl}?$queryString'
               : rawStreamUrl;
 
+          final isDASH = rawStreamUrl.contains('.mpd');
+
           return StreamPlaybackInfo(
             streamUrl: finalStreamUrl,
             headers: {
@@ -361,7 +365,8 @@ class JioLiveSource implements ILiveTvSource {
               'channelId': channel.channelId.toString(),
               'Cookie': 'ssotoken=${session.ssoToken}${hdnea.isNotEmpty ? '; __hdnea__=$hdnea' : ''}',
             },
-            isHls: true,
+            isHls: !isDASH,
+            licenseUrl: drmLicenseUrl.isNotEmpty ? drmLicenseUrl : null,
           );
         } else {
           throw Exception('No playable stream URL returned: ${response.body}');

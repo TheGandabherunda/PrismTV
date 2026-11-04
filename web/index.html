@@ -124,17 +124,33 @@
                 drmConfig = {
                   servers: {
                     'com.widevine.alpha': prefix + '/api/drm-proxy?channel_id=' + chId + '&url=' + encodeURIComponent(drmKey)
+                  },
+                  advanced: {
+                    'com.widevine.alpha': {
+                      videoRobustness: 'SW_SECURE_CRYPTO',
+                      audioRobustness: 'SW_SECURE_CRYPTO'
+                    }
                   }
                 };
               }
             } catch (_) {}
 
+            var prefix = window.location.pathname.toLowerCase().indexOf('/prismtv') === 0 ? '/prismTV' : '';
             player.configure({
               drm: drmConfig,
+              manifest: {
+                dash: {
+                  clockSyncUri: prefix + '/api/dashtime'
+                }
+              },
               streaming: {
                 bufferingGoal: 8,
                 rebufferingGoal: 2,
                 bufferBehind: 30,
+                retryParameters: {
+                  maxAttempts: 3,
+                  timeout: 10000
+                }
               }
             });
 

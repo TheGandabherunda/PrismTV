@@ -119,7 +119,7 @@ class PlayerController extends GetxController {
 
   String _buildStreamUrlForQuality(QualityOption quality) {
     if (_baseStreamUrl.isEmpty) return '';
-    if (quality.id == 'auto') return _baseStreamUrl;
+    if (quality.id == 'auto' || _baseStreamUrl.contains('.mpd')) return _baseStreamUrl;
 
     // Apply bitrate bounds into stream URL
     var url = _baseStreamUrl;
