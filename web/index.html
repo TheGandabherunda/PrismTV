@@ -23,15 +23,34 @@
   </script>
   <script>
     (function() {
-      // Dynamically resolve base href so it works both at root (/) and under subpath (/prismTV/)
+      // Dynamically resolve base href so it works at root (/), subpath (/prismTV/), and local file (webOS file://)
       var path = window.location.pathname;
       var base = document.querySelector('base');
-      if (path.toLowerCase().indexOf('/prismtv') === 0) {
+      if (window.location.protocol === 'file:' || window.location.origin === 'null') {
+        if (base) base.setAttribute('href', './');
+      } else if (path.toLowerCase().indexOf('/prismtv') === 0) {
         if (base) base.setAttribute('href', '/prismTV/');
       } else if (base && base.getAttribute('href') === '$FLUTTER_BASE_HREF') {
         base.setAttribute('href', '/');
       }
     })();
+
+    // LG webOS TV Magic Remote & D-pad Key Support
+    window.addEventListener('keydown', function(e) {
+      if (e.keyCode === 461) { // webOS Back Key
+        e.preventDefault();
+        e.stopPropagation();
+        var escEvent = new KeyboardEvent('keydown', {
+          key: 'Escape',
+          code: 'Escape',
+          keyCode: 27,
+          which: 27,
+          bubbles: true,
+          cancelable: true
+        });
+        window.dispatchEvent(escEvent);
+      }
+    }, true);
   </script>
 
   <meta charset="UTF-8">
@@ -49,23 +68,36 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background-color: #000;
-      overflow: hidden;
+    *, *::before, *::after {
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+    *::-webkit-scrollbar, ::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+      background: transparent !important;
+    }
+    html, body, flutter-view, flt-glass-pane, flt-scene-host, flt-platform-view {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      background-color: #1C1613 !important;
+      overflow: hidden !important;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
     }
     video {
       width: 100% !important;
       height: 100% !important;
       object-fit: contain !important;
-      background-color: #000 !important;
+      background-color: #1C1613 !important;
     }
     flt-platform-view {
       width: 100% !important;
       height: 100% !important;
+      overflow: hidden !important;
     }
   </style>
 
@@ -106,18 +138,31 @@
             return;
           }
 
-          // 2. If changing stream or clearing, destroy previous instances
+          // 2. If changing stream or clearing, destroy previous instances globally & locally
+          if (window.prismShaka) {
+            try {
+              console.log('[PrismTV] Destroying previous global Shaka instance to stop background streaming');
+              window.prismShaka.destroy();
+            } catch (_) {}
+            window.prismShaka = null;
+          }
+          if (window.prismHls) {
+            try {
+              console.log('[PrismTV] Destroying previous global Hls instance');
+              window.prismHls.destroy();
+            } catch (_) {}
+            window.prismHls = null;
+          }
+
           var oldHls = hlsInstances.get(video);
           if (oldHls) {
-            oldHls.destroy();
+            try { oldHls.destroy(); } catch (_) {}
             hlsInstances.delete(video);
-            window.prismHls = null;
           }
           var oldShaka = shakaInstances.get(video);
           if (oldShaka) {
-            oldShaka.destroy();
+            try { oldShaka.destroy(); } catch (_) {}
             shakaInstances.delete(video);
-            window.prismShaka = null;
           }
 
           if (!val) {
@@ -136,15 +181,20 @@
             window.prismShaka = player;
 
             var drmConfig = {};
+            var langPref = '';
+            var hlsFallback = '';
             try {
               var u = new URL(val, window.location.origin);
               var chId = u.searchParams.get('channel_id') || '';
               var drmKey = u.searchParams.get('drm_key') || '';
+              langPref = u.searchParams.get('lang') || '';
+              hlsFallback = u.searchParams.get('hls_fallback') || '';
+              var prefix = window.location.pathname.toLowerCase().indexOf('/prismtv') === 0 ? '/prismTV' : '';
+              var effectiveHost = (u && u.protocol.startsWith('http') && u.origin && u.origin !== 'null' && (window.location.protocol === 'file:' || window.location.origin === 'null')) ? u.origin : prefix;
               if (drmKey) {
-                var prefix = window.location.pathname.toLowerCase().indexOf('/prismtv') === 0 ? '/prismTV' : '';
                 drmConfig = {
                   servers: {
-                    'com.widevine.alpha': prefix + '/api/drm-proxy?' + (chId ? 'channel_id=' + chId + '&' : '') + 'url=' + encodeURIComponent(drmKey)
+                    'com.widevine.alpha': effectiveHost + '/api/drm-proxy?' + (chId ? 'channel_id=' + chId + '&' : '') + 'url=' + encodeURIComponent(drmKey)
                   },
                   advanced: {
                     'com.widevine.alpha': {
@@ -157,11 +207,12 @@
             } catch (_) {}
 
             var prefix = window.location.pathname.toLowerCase().indexOf('/prismtv') === 0 ? '/prismTV' : '';
-            player.configure({
+            var effectiveHost = (u && u.protocol.startsWith('http') && u.origin && u.origin !== 'null' && (window.location.protocol === 'file:' || window.location.origin === 'null')) ? u.origin : prefix;
+            var shakaConfig = {
               drm: drmConfig,
               manifest: {
                 dash: {
-                  clockSyncUri: prefix + '/api/dashtime'
+                  clockSyncUri: effectiveHost + '/api/dashtime'
                 }
               },
               abr: {
@@ -178,15 +229,117 @@
                   timeout: 20000
                 }
               }
-            });
+            };
+            if (langPref) {
+              shakaConfig.preferredAudioLanguage = langPref;
+            }
+            player.configure(shakaConfig);
+
+            // Reset locked audio state for newly loaded channel
+            window.prismLockedAudioLanguage = null;
+            window.prismLockedAudioBandwidth = 0;
 
             player.load(val).then(function() {
               console.log('[PrismTV] Shaka live stream loaded in pristine 1080p Full HD with synchronized audio.');
+
+              // Check if DASH stream actually contains video tracks
+              var tracks = player.getVariantTracks() || [];
+              var hasVideo = tracks.some(function(t) {
+                return (t.height || 0) > 0 || (t.width || 0) > 0 || (t.videoCodec && t.videoCodec.length > 0);
+              });
+
+              if (!hasVideo && hlsFallback) {
+                console.warn('[PrismTV Shaka] DASH manifest has NO video AdaptationSet (Audio only)! Falling back to HLS stream:', hlsFallback);
+                player.destroy().then(function() {
+                  shakaInstances.delete(video);
+                  window.prismShaka = null;
+                  video.src = hlsFallback;
+                });
+                return;
+              }
+
+              // STRICT AUDIO LOCK-IN:
+              // 1. Match channel's desired language among available audio tracks using canonical comparison
+              var availableLangs = player.getAudioLanguages() || [];
+              var targetLang = null;
+              if (langPref) {
+                targetLang = availableLangs.find(function(l) {
+                  return isSameLanguage(l, langPref);
+                });
+              }
+              if (!targetLang && availableLangs.length > 0) {
+                targetLang = availableLangs[0];
+              }
+
+              // 2. Select and lock language, and find maximum audio bandwidth to disallow 33.6k drop
+              if (targetLang) {
+                window.prismLockedAudioLanguage = targetLang;
+                player.selectAudioLanguage(targetLang);
+
+                var langTracks = tracks.filter(function(t) { return isSameLanguage(t.language, targetLang); });
+                var audioBws = langTracks.map(function(t) { return t.audioBandwidth || 0; }).filter(function(b) { return b > 0; });
+                var maxAudioBw = audioBws.length > 0 ? Math.max.apply(null, audioBws) : 0;
+                window.prismLockedAudioBandwidth = maxAudioBw;
+
+                // Select the best matching variant track immediately on load
+                if (langTracks.length > 0) {
+                  langTracks.sort(function(a, b) { return (b.bandwidth || 0) - (a.bandwidth || 0); });
+                  player.selectVariantTrack(langTracks[0], false);
+                }
+
+                if (maxAudioBw > 40000) {
+                  var curRestrictions = player.getConfiguration().abr.restrictions || {};
+                  player.configure({
+                    abr: {
+                      enabled: true,
+                      restrictions: Object.assign({}, curRestrictions, {
+                        minAudioBandwidth: maxAudioBw - 1000
+                      })
+                    }
+                  });
+                  console.log('[PrismTV Shaka] STRICTLY LOCKED audio to language: ' + targetLang + ' at high quality (' + maxAudioBw + ' bps)');
+                } else {
+                  player.configure({ abr: { enabled: true } });
+                  console.log('[PrismTV Shaka] STRICTLY LOCKED audio to language: ' + targetLang);
+                }
+              }
+
+              // 3. Prevent ABR from ever drifting audio language mid-stream
+              player.addEventListener('adaptation', function() {
+                if (window.prismLockedAudioLanguage) {
+                  var curTracks = player.getVariantTracks() || [];
+                  var active = curTracks.find(function(t) { return t.active; });
+                  if (active && active.language && !isSameLanguage(active.language, window.prismLockedAudioLanguage)) {
+                    console.warn('[PrismTV Shaka] ABR attempted audio switch from ' + window.prismLockedAudioLanguage + ' to ' + active.language + '! Reverting to locked language.');
+                    player.selectAudioLanguage(window.prismLockedAudioLanguage);
+                  }
+                }
+              });
+
               video.play().catch(function(e) {
                 console.log('[PrismTV] Autoplay notice:', e);
+                if (e && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
+                  video.muted = true;
+                  video.play().catch(function(_) {});
+                  var unmuteOnce = function() {
+                    video.muted = false;
+                    window.removeEventListener('click', unmuteOnce);
+                    window.removeEventListener('keydown', unmuteOnce);
+                  };
+                  window.addEventListener('click', unmuteOnce);
+                  window.addEventListener('keydown', unmuteOnce);
+                }
               });
             }).catch(function(err) {
               console.error('[PrismTV] Shaka load error:', err);
+              if (hlsFallback) {
+                console.warn('[PrismTV] Shaka load failed, falling back to HLS stream:', hlsFallback);
+                player.destroy().then(function() {
+                  shakaInstances.delete(video);
+                  window.prismShaka = null;
+                  video.src = hlsFallback;
+                });
+              }
             });
             return;
           }
@@ -213,9 +366,32 @@
             hls.loadSource(val);
             hls.attachMedia(video);
 
+            window.prismLockedHlsAudioTrack = -1;
+
             hls.on(Hls.Events.MANIFEST_PARSED, function() {
               console.log('[PrismTV] Hls manifest parsed. Levels:', (hls.levels || []).map(function(l) { return l.height + 'p (' + Math.round(l.bitrate / 1000) + 'kbps)'; }));
               
+              // STRICT AUDIO LOCK-IN FOR HLS:
+              var tracks = hls.audioTracks || [];
+              var targetIdx = -1;
+              if (langPref && tracks.length > 0) {
+                for (var i = 0; i < tracks.length; i++) {
+                  var tLang = tracks[i].lang || '';
+                  var tName = tracks[i].name || '';
+                  if (isSameLanguage(tLang, langPref) || isSameLanguage(tName, langPref)) {
+                    targetIdx = i;
+                    break;
+                  }
+                }
+              }
+              if (targetIdx !== -1) {
+                hls.audioTrack = targetIdx;
+                window.prismLockedHlsAudioTrack = targetIdx;
+                console.log('[PrismTV Hls] Audio strictly locked to track ' + targetIdx + ' (' + (tracks[targetIdx] ? tracks[targetIdx].name : '') + ')');
+              } else if (tracks.length > 0) {
+                window.prismLockedHlsAudioTrack = hls.audioTrack;
+              }
+
               if (window.prismPreferredQualityHeight && window.prismPreferredQualityHeight > 0) {
                 window.prismSetQuality(window.prismPreferredQualityHeight);
               } else if (hls.levels && hls.levels.length > 0) {
@@ -231,7 +407,28 @@
 
               video.play().catch(function(e) {
                 console.log('[PrismTV] Autoplay notice:', e);
+                if (e && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
+                  video.muted = true;
+                  video.play().catch(function(_) {});
+                  var unmuteOnce = function() {
+                    video.muted = false;
+                    window.removeEventListener('click', unmuteOnce);
+                    window.removeEventListener('keydown', unmuteOnce);
+                  };
+                  window.addEventListener('click', unmuteOnce);
+                  window.addEventListener('keydown', unmuteOnce);
+                }
               });
+            });
+
+            // Prevent Hls.js from drifting audio track when level switches
+            hls.on(Hls.Events.LEVEL_SWITCHED, function() {
+              if (window.prismLockedHlsAudioTrack !== undefined && window.prismLockedHlsAudioTrack >= 0) {
+                if (hls.audioTrack !== window.prismLockedHlsAudioTrack) {
+                  console.log('[PrismTV Hls] Reverting audio track to locked track index after level switch:', window.prismLockedHlsAudioTrack);
+                  hls.audioTrack = window.prismLockedHlsAudioTrack;
+                }
+              }
             });
 
             hls.on(Hls.Events.ERROR, function(event, data) {
@@ -264,41 +461,139 @@
         enumerable: true,
       });
 
+      var CANONICAL_LANG_MAP = {
+        'kn': 'kn', 'kan': 'kn', 'kannada': 'kn',
+        'te': 'te', 'tel': 'te', 'telugu': 'te',
+        'ta': 'ta', 'tam': 'ta', 'tamil': 'ta',
+        'ml': 'ml', 'mal': 'ml', 'malayalam': 'ml',
+        'hi': 'hi', 'hin': 'hi', 'hindi': 'hi',
+        'en': 'en', 'eng': 'en', 'english': 'en',
+        'mr': 'mr', 'mar': 'mr', 'marathi': 'mr',
+        'bn': 'bn', 'ben': 'bn', 'bengali': 'bn', 'bangla': 'bn',
+        'gu': 'gu', 'guj': 'gu', 'gujarati': 'gu',
+        'pa': 'pa', 'pan': 'pa', 'punjabi': 'pa',
+        'or': 'or', 'ori': 'or', 'odia': 'or', 'oriya': 'or',
+        'bho': 'bho', 'bhojpuri': 'bho',
+        'as': 'as', 'asm': 'as', 'assamese': 'as'
+      };
+
+      function getCanonicalLang(code) {
+        if (!code) return '';
+        var c = String(code).toLowerCase().trim();
+        return CANONICAL_LANG_MAP[c] || c;
+      }
+
+      function isSameLanguage(a, b) {
+        if (!a || !b) return false;
+        var ca = getCanonicalLang(a);
+        var cb = getCanonicalLang(b);
+        if (ca && cb && ca === cb) return true;
+        var la = String(a).toLowerCase().trim();
+        var lb = String(b).toLowerCase().trim();
+        return la === lb || la.startsWith(lb) || lb.startsWith(la);
+      }
+
+      function formatAudioLanguageLabel(code) {
+        var map = {
+          'kn': 'Kannada',
+          'kan': 'Kannada',
+          'te': 'Telugu',
+          'tel': 'Telugu',
+          'ta': 'Tamil',
+          'tam': 'Tamil',
+          'ml': 'Malayalam',
+          'mal': 'Malayalam',
+          'hi': 'Hindi',
+          'hin': 'Hindi',
+          'en': 'English',
+          'eng': 'English',
+          'mr': 'Marathi',
+          'mar': 'Marathi',
+          'bn': 'Bengali',
+          'ben': 'Bengali',
+          'gu': 'Gujarati',
+          'guj': 'Gujarati',
+          'pa': 'Punjabi',
+          'pan': 'Punjabi',
+          'or': 'Odia',
+          'ori': 'Odia',
+          'bho': 'Bhojpuri',
+          'as': 'Assamese',
+          'und': 'Default Audio'
+        };
+        if (!code) return 'Default Audio';
+        var lower = code.toLowerCase().trim();
+        return map[lower] || (code.toUpperCase());
+      }
+
       window.prismSetQuality = function(targetHeight) {
         if (window.prismShaka) {
           var player = window.prismShaka;
+          var langToPreserve = window.prismLockedAudioLanguage;
+          if (!langToPreserve) {
+            var curTracks = player.getVariantTracks() || [];
+            var act = curTracks.find(function(t) { return t.active; });
+            langToPreserve = act ? act.language : null;
+          }
+
+          var curRestrictions = player.getConfiguration().abr.restrictions || {};
+          var maxAudioBw = window.prismLockedAudioBandwidth || 0;
+          var audioRestrictions = {};
+          if (maxAudioBw > 40000) {
+            audioRestrictions.minAudioBandwidth = maxAudioBw - 1000;
+          } else if (curRestrictions.minAudioBandwidth) {
+            audioRestrictions.minAudioBandwidth = curRestrictions.minAudioBandwidth;
+          }
+
           if (!targetHeight || targetHeight <= 0) {
             player.configure({
               abr: {
                 enabled: true,
-                restrictions: { minHeight: 0, maxHeight: 1080 }
+                restrictions: Object.assign({}, audioRestrictions, { minHeight: 0, maxHeight: 1080 })
               }
             });
-            console.log('[PrismTV Shaka] Quality set to Auto');
+            if (langToPreserve) player.selectAudioLanguage(langToPreserve);
+            console.log('[PrismTV Shaka] Quality set to Auto (audio locked: ' + langToPreserve + ')');
             return true;
           }
-          var tracks = player.getVariantTracks() || [];
-          var heights = tracks.map(function(t) { return t.height || 0; }).filter(function(h) { return h > 0; });
+
+          var currentTracks = player.getVariantTracks() || [];
+          var heights = currentTracks.map(function(t) { return t.height || 0; }).filter(function(h) { return h > 0; });
           var maxH = heights.length > 0 ? Math.max.apply(null, heights) : 1080;
           var effectiveH = Math.min(targetHeight, maxH);
+
+          // Pick variant track matching effectiveH and langToPreserve
+          var matchingTrack = currentTracks.find(function(t) {
+            return t.height === effectiveH && (!langToPreserve || isSameLanguage(t.language, langToPreserve));
+          }) || currentTracks.find(function(t) {
+            return t.height === effectiveH;
+          });
+
+          if (matchingTrack) {
+            player.selectVariantTrack(matchingTrack, /* clearBuffer= */ false);
+          }
+
           player.configure({
             abr: {
               enabled: true,
-              restrictions: {
+              restrictions: Object.assign({}, audioRestrictions, {
                 minHeight: effectiveH,
                 maxHeight: effectiveH
-              }
+              })
             }
           });
-          console.log('[PrismTV Shaka] Video quality locked to ' + effectiveH + 'p without buffer flush (audio preserved)');
+          if (langToPreserve) player.selectAudioLanguage(langToPreserve);
+          console.log('[PrismTV Shaka] Video quality locked to ' + effectiveH + 'p (audio locked: ' + langToPreserve + ')');
           return true;
         }
 
         if (window.prismHls) {
           var hls = window.prismHls;
+          var targetAudio = window.prismLockedHlsAudioTrack >= 0 ? window.prismLockedHlsAudioTrack : hls.audioTrack;
           if (!targetHeight || targetHeight <= 0) {
             hls.currentLevel = -1;
-            console.log('[PrismTV Hls] Quality set to Auto (ABR mode)');
+            if (targetAudio >= 0) hls.audioTrack = targetAudio;
+            console.log('[PrismTV Hls] Quality set to Auto (audio locked: ' + targetAudio + ')');
             return true;
           }
           var levels = hls.levels || [];
@@ -318,12 +613,397 @@
           }
           if (bestIdx !== -1) {
             hls.currentLevel = bestIdx;
-            console.log('[PrismTV Hls] Locked quality to level ' + bestIdx + ' (' + (levels[bestIdx] ? levels[bestIdx].height : targetHeight) + 'p)');
+            if (targetAudio >= 0) hls.audioTrack = targetAudio;
+            console.log('[PrismTV Hls] Locked quality to level ' + bestIdx + ' (' + (levels[bestIdx] ? levels[bestIdx].height : targetHeight) + 'p, audio: ' + targetAudio + ')');
             return true;
           }
         }
 
         return false;
+      };
+
+      window.prismGetQualityLevels = function() {
+        if (window.prismShaka) {
+          var player = window.prismShaka;
+          var tracks = player.getVariantTracks() || [];
+          var currentRestrictions = player.getConfiguration().abr.restrictions;
+          var isAuto = !currentRestrictions.minHeight || currentRestrictions.minHeight <= 0;
+          var activeHeight = currentRestrictions.minHeight || 0;
+
+          // Find current active track height if auto
+          var activeTrack = tracks.find(function(t) { return t.active; });
+          var activeTrackHeight = activeTrack ? (activeTrack.height || 0) : 0;
+
+          // Group unique video heights from source
+          var heightMap = {};
+          tracks.forEach(function(t) {
+            var h = t.height || 0;
+            if (h > 0) {
+              if (!heightMap[h] || (t.bandwidth || 0) > (heightMap[h].bandwidth || 0)) {
+                heightMap[h] = {
+                  height: h,
+                  width: t.width || 0,
+                  bandwidth: t.bandwidth || t.videoBandwidth || 0
+                };
+              }
+            }
+          });
+
+          var heights = Object.keys(heightMap).map(Number).sort(function(a, b) { return b - a; });
+          
+          var options = [
+            {
+              id: 'auto',
+              label: 'Auto (Recommended)',
+              badge: activeTrackHeight > 0 ? 'Adaptive • Currently ' + activeTrackHeight + 'p' : 'Dynamic Adaptive',
+              height: 0,
+              bandwidth: 0,
+              active: isAuto
+            }
+          ];
+
+          heights.forEach(function(h) {
+            var info = heightMap[h];
+            var bwKbps = Math.round(info.bandwidth / 1000);
+            var bwLabel = bwKbps >= 1000
+              ? (bwKbps / 1000).toFixed(1) + ' Mbps'
+              : bwKbps + ' Kbps';
+            var label = h >= 1080 ? h + 'p Full HD'
+                      : (h >= 720 ? h + 'p HD'
+                      : (h >= 540 ? h + 'p Standard' : h + 'p Low'));
+            var badge = (info.width ? info.width + 'x' + h : h + 'p') + (bwKbps > 0 ? ' • ' + bwLabel : '');
+            var isSelected = !isAuto && (activeHeight === h);
+
+            options.push({
+              id: h + 'p',
+              label: label,
+              badge: badge,
+              height: h,
+              bandwidth: info.bandwidth,
+              active: isSelected
+            });
+          });
+
+          return options;
+        }
+
+        if (window.prismHls) {
+          var hls = window.prismHls;
+          var levels = hls.levels || [];
+          var isAuto = hls.currentLevel === -1;
+          var currentLevel = hls.levels[hls.currentLevel];
+          var activeHeight = currentLevel ? (currentLevel.height || 0) : 0;
+
+          var heightMap = {};
+          levels.forEach(function(l, idx) {
+            var h = l.height || 0;
+            if (h > 0) {
+              if (!heightMap[h] || (l.bitrate || 0) > (heightMap[h].bandwidth || 0)) {
+                heightMap[h] = {
+                  height: h,
+                  width: l.width || 0,
+                  bandwidth: l.bitrate || 0,
+                  levelIndex: idx
+                };
+              }
+            }
+          });
+
+          var heights = Object.keys(heightMap).map(Number).sort(function(a, b) { return b - a; });
+          var options = [
+            {
+              id: 'auto',
+              label: 'Auto (Recommended)',
+              badge: activeHeight > 0 ? 'Adaptive • Currently ' + activeHeight + 'p' : 'Dynamic Adaptive',
+              height: 0,
+              bandwidth: 0,
+              active: isAuto
+            }
+          ];
+
+          heights.forEach(function(h) {
+            var info = heightMap[h];
+            var bwKbps = Math.round(info.bandwidth / 1000);
+            var bwLabel = bwKbps >= 1000
+              ? (bwKbps / 1000).toFixed(1) + ' Mbps'
+              : bwKbps + ' Kbps';
+            var label = h >= 1080 ? h + 'p Full HD'
+                      : (h >= 720 ? h + 'p HD'
+                      : (h >= 540 ? h + 'p Standard' : h + 'p Low'));
+            var badge = (info.width ? info.width + 'x' + h : h + 'p') + (bwKbps > 0 ? ' • ' + bwLabel : '');
+            var isSelected = !isAuto && (activeHeight === h);
+
+            options.push({
+              id: h + 'p',
+              label: label,
+              badge: badge,
+              height: h,
+              bandwidth: info.bandwidth,
+              active: isSelected
+            });
+          });
+
+          return options;
+        }
+
+        return [];
+      };
+
+      window.prismGetQualityLevelsJson = function() {
+        try {
+          var levels = window.prismGetQualityLevels() || [];
+          return JSON.stringify(levels);
+        } catch (_) {
+          return '[]';
+        }
+      };
+
+      window.prismGetAudioTracks = function() {
+        if (window.prismShaka) {
+          var player = window.prismShaka;
+          var langs = player.getAudioLanguages() || [];
+          var tracks = player.getVariantTracks() || [];
+          var activeTrack = tracks.find(function(t) { return t.active; });
+          var activeLang = activeTrack ? activeTrack.language : (window.prismLockedAudioLanguage || langs[0] || '');
+
+          if (langs.length === 0 && tracks.length > 0) {
+            var set = {};
+            tracks.forEach(function(t) {
+              if (t.language && !set[t.language]) {
+                set[t.language] = true;
+                langs.push(t.language);
+              }
+            });
+          }
+
+          return langs.map(function(lang) {
+            return {
+              id: lang,
+              language: lang,
+              label: formatAudioLanguageLabel(lang),
+              active: isSameLanguage(lang, activeLang)
+            };
+          });
+        }
+
+        if (window.prismHls) {
+          var hls = window.prismHls;
+          var tracks = hls.audioTracks || [];
+          var currentIdx = (window.prismLockedHlsAudioTrack !== undefined && window.prismLockedHlsAudioTrack >= 0)
+            ? window.prismLockedHlsAudioTrack
+            : hls.audioTrack;
+          return tracks.map(function(t, idx) {
+            return {
+              id: String(idx),
+              language: t.lang || '',
+              label: t.name || formatAudioLanguageLabel(t.lang),
+              active: idx === currentIdx
+            };
+          });
+        }
+
+        return [];
+      };
+
+      window.prismGetAudioTracksJson = function() {
+        try {
+          var tracks = window.prismGetAudioTracks() || [];
+          return JSON.stringify(tracks);
+        } catch (_) {
+          return '[]';
+        }
+      };
+
+      window.prismSetAudioTrack = function(trackIdOrLang) {
+        if (!trackIdOrLang) return false;
+        if (window.prismShaka) {
+          try {
+            var player = window.prismShaka;
+            var targetLang = trackIdOrLang.toLowerCase();
+            window.prismLockedAudioLanguage = targetLang;
+
+            // 1. Tell Shaka ABR about the selected audio language
+            player.selectAudioLanguage(targetLang);
+
+            // 2. Find variant tracks for this language using canonical matching
+            var tracks = player.getVariantTracks() || [];
+            var matchingTracks = tracks.filter(function(t) {
+              return isSameLanguage(t.language, targetLang);
+            });
+
+            if (matchingTracks.length > 0) {
+              var activeTrack = tracks.find(function(t) { return t.active; });
+              var curHeight = activeTrack ? (activeTrack.height || 0) : 0;
+
+              // Pick track matching current video height (or highest bandwidth)
+              var chosenTrack = null;
+              if (curHeight > 0) {
+                chosenTrack = matchingTracks.find(function(t) { return t.height === curHeight; });
+              }
+              if (!chosenTrack) {
+                matchingTracks.sort(function(a, b) { return (b.bandwidth || 0) - (a.bandwidth || 0); });
+                chosenTrack = matchingTracks[0];
+              }
+
+              if (chosenTrack) {
+                // Immediately switch variant track and flush audio buffer so change is instantaneous
+                player.selectVariantTrack(chosenTrack, /* clearBuffer= */ true);
+                console.log('[PrismTV Shaka] Selected & SWITCHED variant track to language:', chosenTrack.language, 'height:', chosenTrack.height + 'p');
+              }
+
+              // Update audio bandwidth restriction without erasing video restrictions
+              var audioBws = matchingTracks.map(function(t) { return t.audioBandwidth || 0; }).filter(function(b) { return b > 0; });
+              var maxBw = audioBws.length > 0 ? Math.max.apply(null, audioBws) : 0;
+              var curCfg = player.getConfiguration();
+              var curRestrictions = (curCfg.abr && curCfg.abr.restrictions) || {};
+              var isAuto = !curRestrictions.minHeight || curRestrictions.minHeight <= 0;
+              var abrUpdate = {
+                enabled: isAuto,
+                restrictions: Object.assign({}, curRestrictions)
+              };
+              if (maxBw > 40000) {
+                window.prismLockedAudioBandwidth = maxBw;
+                abrUpdate.restrictions.minAudioBandwidth = maxBw - 1000;
+              }
+              player.configure({ abr: abrUpdate });
+              player.selectAudioLanguage(targetLang);
+            }
+
+            return true;
+          } catch (e) {
+            console.error('[PrismTV Shaka] Failed to set audio language:', e);
+            return false;
+          }
+        }
+
+        if (window.prismHls) {
+          var hls = window.prismHls;
+          var idx = parseInt(trackIdOrLang, 10);
+          if (!isNaN(idx) && idx >= 0 && idx < (hls.audioTracks || []).length) {
+            hls.audioTrack = idx;
+            window.prismLockedHlsAudioTrack = idx;
+            console.log('[PrismTV Hls] Selected & LOCKED audio track index:', idx);
+            return true;
+          }
+          var tracks = hls.audioTracks || [];
+          for (var i = 0; i < tracks.length; i++) {
+            if (isSameLanguage(tracks[i].lang, trackIdOrLang) || (tracks[i].name || '').toLowerCase().includes(trackIdOrLang.toLowerCase())) {
+              hls.audioTrack = i;
+              window.prismLockedHlsAudioTrack = i;
+              console.log('[PrismTV Hls] Selected & LOCKED audio track:', trackIdOrLang);
+              return true;
+            }
+          }
+        }
+
+        return false;
+      };
+
+      window.prismGetLiveDelay = function() {
+        var video = document.querySelector('video');
+        if (!video) return 0;
+        try {
+          // 1. Shaka Player seek range
+          if (window.prismShaka) {
+            var range = window.prismShaka.seekRange();
+            if (range && range.end && range.end > 0) {
+              var diff = Math.round(range.end - video.currentTime);
+              if (diff >= 0 && diff < 86400) return diff;
+            }
+          }
+          // 2. HLS.js live sync position
+          if (window.prismHls) {
+            var sync = window.prismHls.liveSyncPosition;
+            if (sync && sync > 0) {
+              var diff = Math.round(sync - video.currentTime);
+              if (diff >= 0 && diff < 86400) return diff;
+            }
+          }
+          // 3. Native video seekable / buffered
+          var liveEdge = 0;
+          if (video.seekable && video.seekable.length > 0) {
+            liveEdge = video.seekable.end(video.seekable.length - 1);
+          } else if (video.buffered && video.buffered.length > 0) {
+            liveEdge = video.buffered.end(video.buffered.length - 1);
+          }
+          if (liveEdge > 0) {
+            var delay = Math.round(liveEdge - video.currentTime);
+            return (delay >= 0 && delay < 86400) ? delay : 0;
+          }
+        } catch (e) {}
+        return 0;
+      };
+
+      window.prismGoToLive = function() {
+        var video = document.querySelector('video');
+        if (!video) return;
+        try {
+          var liveEdge = 0;
+          if (window.prismShaka) {
+            var range = window.prismShaka.seekRange();
+            if (range && range.end) liveEdge = range.end;
+          } else if (window.prismHls) {
+            var sync = window.prismHls.liveSyncPosition;
+            if (sync && sync > 0) liveEdge = sync;
+          }
+          if (!liveEdge && video.seekable && video.seekable.length > 0) {
+            liveEdge = video.seekable.end(video.seekable.length - 1);
+          } else if (!liveEdge && video.buffered && video.buffered.length > 0) {
+            liveEdge = video.buffered.end(video.buffered.length - 1);
+          }
+
+          if (liveEdge > 0) {
+            var target = Math.max(0, liveEdge - 3.0);
+            video.currentTime = target;
+          }
+          if (video.paused) {
+            video.play().catch(function() {});
+          }
+        } catch (e) {}
+      };
+
+      window.prismResumeVideo = function() {
+        var videos = document.querySelectorAll('video');
+        for (var i = 0; i < videos.length; i++) {
+          var v = videos[i];
+          if (v) {
+            if (v.paused) {
+              v.play().catch(function() {});
+            }
+          }
+        }
+        if (window.prismHls) {
+          try {
+            window.prismHls.startLoad();
+          } catch (_) {}
+        }
+      };
+
+      window.prismToggleFullscreen = function() {
+        if (!document.fullscreenElement) {
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch(function() {});
+          }
+        } else {
+          if (document.exitFullscreen) {
+            document.exitFullscreen().catch(function() {});
+          }
+        }
+      };
+
+      window.prismIsFullscreen = function() {
+        return !!document.fullscreenElement;
+      };
+
+      window.prismTogglePiP = function() {
+        var video = document.querySelector('video');
+        if (video) {
+          if (document.pictureInPictureElement) {
+            document.exitPictureInPicture().catch(function() {});
+          } else if (video.requestPictureInPicture) {
+            video.requestPictureInPicture().catch(function() {});
+          }
+        }
       };
 
       console.log('[PrismTV] Hls.js & Shaka Player Media Source bridges loaded.');
@@ -334,14 +1014,22 @@
   <link rel="manifest" href="manifest.json">
   <style>
     body {
-      background-color: #000000;
+      background-color: #1C1613;
       margin: 0;
       padding: 0;
-      overflow: hidden;
+      overflow: hidden !important;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
     }
   </style>
 </head>
 <body>
-  <script src="flutter_bootstrap.js?v=20261104-1080p" async></script>
+  <script>
+    // Cache bust flutter_bootstrap.js
+    var script = document.createElement('script');
+    script.src = 'flutter_bootstrap.js?v=' + Date.now();
+    script.async = true;
+    document.body.appendChild(script);
+  </script>
 </body>
 </html>

@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import '../../data/models/auth_session.dart';
+import '../../data/models/channel_model.dart';
 import '../../data/models/quality_option.dart';
 
 class HiveService {
@@ -101,6 +102,56 @@ class HiveService {
     } else {
       await box.put('custom_proxy_url', url.trim());
     }
+  }
+
+  // Last Played Channel & Cache (for browser reload & instant resume)
+  static ChannelModel? getLastPlayedChannel() {
+    try {
+      final box = Hive.box(cacheBoxName);
+      final raw = box.get('last_played_channel');
+      if (raw != null) {
+        if (raw is Map) {
+          return ChannelModel.fromJson(Map<String, dynamic>.from(raw));
+        } else if (raw is String) {
+          return ChannelModel.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+        }
+      }
+    } catch (e) {
+      debugPrint('[HIVE_CHANNEL_ERROR] $e');
+    }
+    return null;
+  }
+
+  static Future<void> saveLastPlayedChannel(ChannelModel channel) async {
+    try {
+      final box = Hive.box(cacheBoxName);
+      await box.put('last_played_channel', channel.toJson());
+    } catch (_) {}
+  }
+
+  static List<ChannelModel> getCachedChannels() {
+    try {
+      final box = Hive.box(cacheBoxName);
+      final raw = box.get('cached_channels_list');
+      if (raw is List) {
+        return raw.map((item) {
+          if (item is Map) {
+            return ChannelModel.fromJson(Map<String, dynamic>.from(item));
+          } else if (item is String) {
+            return ChannelModel.fromJson(jsonDecode(item) as Map<String, dynamic>);
+          }
+          return null;
+        }).whereType<ChannelModel>().toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  static Future<void> saveCachedChannels(List<ChannelModel> channels) async {
+    try {
+      final box = Hive.box(cacheBoxName);
+      await box.put('cached_channels_list', channels.map((c) => c.toJson()).toList());
+    } catch (_) {}
   }
 }
 

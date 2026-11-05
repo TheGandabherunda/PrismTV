@@ -30,6 +30,18 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/dist/
+dist/
+*.ipk
+*.apk
+/scratch/
+scratch/
+
+# macOS / iOS
+macos/Flutter/ephemeral/
+**/Flutter/ephemeral/
+**/Pods/
+*.xcuserdata/
 
 # Local Storage / Secrets / Credentials
 *.hive

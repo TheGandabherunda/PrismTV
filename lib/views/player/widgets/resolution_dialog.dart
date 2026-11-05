@@ -5,6 +5,7 @@ import '../../../data/models/quality_option.dart';
 
 class ResolutionDialog extends StatelessWidget {
   final QualityOption currentOption;
+  final List<QualityOption>? availableOptions;
   final ValueChanged<QualityOption> onSelect;
   final String title;
   final String subtitle;
@@ -12,6 +13,7 @@ class ResolutionDialog extends StatelessWidget {
   const ResolutionDialog({
     super.key,
     required this.currentOption,
+    this.availableOptions,
     required this.onSelect,
     this.title = 'STREAM RESOLUTION',
     this.subtitle = 'Select preferred playback video quality',
@@ -19,6 +21,10 @@ class ResolutionDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final options = (availableOptions != null && availableOptions!.isNotEmpty)
+        ? availableOptions!
+        : QualityOption.defaultOptions;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
@@ -91,18 +97,31 @@ class ResolutionDialog extends StatelessWidget {
             Container(height: 1, color: AppColors.unfocusedBorder),
             const SizedBox(height: 14),
 
-            // Resolution Options List
-            Column(
-              children: QualityOption.defaultOptions.map((opt) {
-                return _QualityOptionTile(
-                  option: opt,
-                  isSelected: opt.id == currentOption.id,
-                  onTap: () {
-                    onSelect(opt);
-                    Get.back();
-                  },
-                );
-              }).toList(),
+            // Resolution Options List (Dynamic from stream representations)
+            Flexible(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 380),
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: options.map((opt) {
+                      final isSelected = opt.id == currentOption.id ||
+                          (opt.targetHeight > 0 && opt.targetHeight == currentOption.targetHeight) ||
+                          (opt.id == 'auto' && currentOption.id == 'auto');
+
+                      return _QualityOptionTile(
+                        option: opt,
+                        isSelected: isSelected,
+                        onTap: () {
+                          onSelect(opt);
+                          Get.back();
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
             ),
 
             const SizedBox(height: 10),

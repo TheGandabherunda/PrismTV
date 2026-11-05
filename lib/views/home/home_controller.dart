@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../core/constants/app_colors.dart';
+import '../../core/services/ambient_color_service.dart';
 import '../../core/storage/hive_service.dart';
+import '../../data/models/auth_session.dart';
 import '../../data/models/category_model.dart';
 import '../../data/models/channel_model.dart';
 import '../../data/models/epg_program_model.dart';
@@ -10,7 +12,10 @@ import '../../data/models/quality_option.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/channel_repository.dart';
 import '../../routes/app_routes.dart';
+import '../player/player_controller.dart';
 import '../player/widgets/resolution_dialog.dart';
+import 'widgets/account_dialog.dart';
+import 'widgets/settings_dialog.dart';
 
 class HomeController extends GetxController {
   final ChannelRepository _channelRepo = Get.find<ChannelRepository>();
@@ -20,17 +25,30 @@ class HomeController extends GetxController {
   final RxList<ChannelModel> filteredChannels = <ChannelModel>[].obs;
 
   final List<LanguageModel> languages = LanguageModel.defaultLanguages;
-  late final Rx<LanguageModel> selectedLanguage;
+  final Rx<LanguageModel> selectedLanguage = LanguageModel.defaultLanguages.first.obs;
+  final RxSet<String> selectedLanguageIds = <String>{'all'}.obs;
 
   final List<CategoryModel> categories = CategoryModel.defaultCategories;
-  late final Rx<CategoryModel> selectedCategory;
+  final Rx<CategoryModel> selectedCategory = CategoryModel.defaultCategories.first.obs;
+  final RxSet<String> selectedCategoryIds = <String>{'all'}.obs;
+
+  // Ordered list of categorized channel sections for category-wise splitting
+  final RxList<MapEntry<CategoryModel, List<ChannelModel>>> categorizedSections =
+      <MapEntry<CategoryModel, List<ChannelModel>>>[].obs;
 
   final TextEditingController searchController = TextEditingController();
   final RxString searchQuery = ''.obs;
 
-  final RxInt selectedSidebarIndex = 0.obs;
   final Rxn<ChannelModel> focusedChannel = Rxn<ChannelModel>();
   final Rxn<EpgProgramModel> currentProgram = Rxn<EpgProgramModel>();
+  final Rx<AmbientPalette> ambientPalette = AmbientPalette.defaultPalette.obs;
+  Timer? _unfocusTimer;
+
+  String? get activeArtworkUrl {
+    final poster = currentProgram.value?.posterUrl;
+    if (poster != null && poster.trim().isNotEmpty) return poster;
+    return focusedChannel.value?.fullLogoUrl;
+  }
 
   final RxBool isLoadingChannels = true.obs;
   final RxBool isLoadingEpg = false.obs;
@@ -42,8 +60,8 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    selectedLanguage = languages.first.obs; // Defaults to All Languages
-    selectedCategory = categories.first.obs; // Defaults to All Channels
+    selectedLanguage.value = languages.first; // Defaults to All Languages
+    selectedCategory.value = categories.first; // Defaults to All Channels
     defaultQuality.value = HiveService.getPreferredQualityOption();
     isAuthenticated.value = _authRepo.isAuthenticated;
 
@@ -56,6 +74,7 @@ class HomeController extends GetxController {
 
   @override
   void onClose() {
+    _unfocusTimer?.cancel();
     searchController.dispose();
     super.onClose();
   }
@@ -65,140 +84,272 @@ class HomeController extends GetxController {
     try {
       final list = await _channelRepo.getChannels();
       allChannels.assignAll(list);
+      HiveService.saveCachedChannels(list);
       _filterChannels();
-
-      if (filteredChannels.isNotEmpty) {
-        onChannelFocused(filteredChannels.first);
-      }
     } catch (_) {}
     isLoadingChannels.value = false;
   }
 
   void selectLanguage(LanguageModel language) {
-    selectedLanguage.value = language;
-    _filterChannels();
-    if (filteredChannels.isNotEmpty) {
-      onChannelFocused(filteredChannels.first);
+    toggleLanguage(language.id);
+  }
+
+  void toggleLanguage(String id) {
+    if (id == 'all') {
+      selectedLanguageIds.assignAll(['all']);
     } else {
-      focusedChannel.value = null;
-      currentProgram.value = null;
+      selectedLanguageIds.remove('all');
+      if (selectedLanguageIds.contains(id)) {
+        selectedLanguageIds.remove(id);
+        if (selectedLanguageIds.isEmpty) {
+          selectedLanguageIds.add('all');
+        }
+      } else {
+        selectedLanguageIds.add(id);
+      }
     }
+    final firstId = selectedLanguageIds.first;
+    selectedLanguage.value = languages.firstWhereOrNull((l) => l.id == firstId) ?? languages.first;
+    _filterChannels();
+    _refreshFocusedChannel();
+  }
+
+  void resetLanguageFilter() {
+    selectedLanguageIds.assignAll(['all']);
+    selectedLanguage.value = languages.first;
+    _filterChannels();
+    _refreshFocusedChannel();
   }
 
   void selectCategory(CategoryModel category) {
-    selectedCategory.value = category;
-    _filterChannels();
-    if (filteredChannels.isNotEmpty) {
-      onChannelFocused(filteredChannels.first);
+    toggleCategory(category.id);
+  }
+
+  void toggleCategory(String id) {
+    if (id == 'all') {
+      selectedCategoryIds.assignAll(['all']);
     } else {
+      selectedCategoryIds.remove('all');
+      if (selectedCategoryIds.contains(id)) {
+        selectedCategoryIds.remove(id);
+        if (selectedCategoryIds.isEmpty) {
+          selectedCategoryIds.add('all');
+        }
+      } else {
+        selectedCategoryIds.add(id);
+      }
+    }
+    final firstId = selectedCategoryIds.first;
+    selectedCategory.value = categories.firstWhereOrNull((c) => c.id == firstId) ?? categories.first;
+    _filterChannels();
+    _refreshFocusedChannel();
+  }
+
+  void resetCategoryFilter() {
+    selectedCategoryIds.assignAll(['all']);
+    selectedCategory.value = categories.first;
+    _filterChannels();
+    _refreshFocusedChannel();
+  }
+
+  void resetAllFilters() {
+    selectedLanguageIds.assignAll(['all']);
+    selectedCategoryIds.assignAll(['all']);
+    selectedLanguage.value = languages.first;
+    selectedCategory.value = categories.first;
+    searchController.clear();
+    searchQuery.value = '';
+    _filterChannels();
+    _refreshFocusedChannel();
+  }
+
+  void _refreshFocusedChannel() {
+    if (focusedChannel.value != null && !filteredChannels.contains(focusedChannel.value)) {
       focusedChannel.value = null;
       currentProgram.value = null;
+      ambientPalette.value = AmbientPalette.defaultPalette;
     }
   }
+
+  String get languageDropdownLabel {
+    if (selectedLanguageIds.contains('all') || selectedLanguageIds.isEmpty) {
+      return 'All Languages';
+    }
+    if (selectedLanguageIds.length == 1) {
+      final lang = languages.firstWhereOrNull((l) => l.id == selectedLanguageIds.first);
+      return lang?.title ?? '1 Language';
+    }
+    return '${selectedLanguageIds.length} Languages';
+  }
+
+  String get categoryDropdownLabel {
+    if (selectedCategoryIds.contains('all') || selectedCategoryIds.isEmpty) {
+      return 'All Categories';
+    }
+    if (selectedCategoryIds.length == 1) {
+      final cat = categories.firstWhereOrNull((c) => c.id == selectedCategoryIds.first);
+      return cat?.title ?? '1 Category';
+    }
+    return '${selectedCategoryIds.length} Categories';
+  }
+
+  int get activeFilterCount {
+    int count = 0;
+    if (!selectedLanguageIds.contains('all') && selectedLanguageIds.isNotEmpty) {
+      count += selectedLanguageIds.length;
+    }
+    if (!selectedCategoryIds.contains('all') && selectedCategoryIds.isNotEmpty) {
+      count += selectedCategoryIds.length;
+    }
+    return count;
+  }
+
+  bool get hasActiveFilters => activeFilterCount > 0;
 
   void onSearchChanged(String query) {
     searchQuery.value = query;
     _filterChannels();
-    if (filteredChannels.isNotEmpty) {
-      onChannelFocused(filteredChannels.first);
-    } else {
-      focusedChannel.value = null;
-      currentProgram.value = null;
-    }
+    _refreshFocusedChannel();
   }
 
   void clearSearch() {
     searchController.clear();
     searchQuery.value = '';
     _filterChannels();
-    if (filteredChannels.isNotEmpty) {
-      onChannelFocused(filteredChannels.first);
-    }
-  }
-
-  void selectSidebar(int index) {
-    selectedSidebarIndex.value = index;
-    if (index == 3) {
-      // Favorites tab
-      selectCategory(categories.firstWhere((c) => c.id == 'favorites'));
-    } else if (index == 0) {
-      // Live TV tab
-      selectCategory(categories.first);
-    }
+    _refreshFocusedChannel();
   }
 
   void _filterChannels() {
-    final lang = selectedLanguage.value;
-    final cat = selectedCategory.value;
     final query = searchQuery.value.trim().toLowerCase();
+    final isAllLangs = selectedLanguageIds.contains('all') || selectedLanguageIds.isEmpty;
+    final isAllCats = selectedCategoryIds.contains('all') || selectedCategoryIds.isEmpty;
 
-    final filtered = allChannels.where((c) {
-      // 1. Language Filter
-      final bool matchesLang;
-      if (lang.id == 'all' || lang.jioLanguageId == null) {
-        matchesLang = true;
-      } else {
-        matchesLang = c.languageId == lang.jioLanguageId;
+    // Resolve matching language IDs
+    final selectedJioLangIds = <int>{};
+    if (!isAllLangs) {
+      for (final id in selectedLanguageIds) {
+        final lang = languages.firstWhereOrNull((l) => l.id == id);
+        if (lang?.jioLanguageId != null) {
+          selectedJioLangIds.add(lang!.jioLanguageId!);
+        }
       }
+    }
 
-      // 2. Category Filter
-      final bool matchesCat;
-      if (cat.id == 'all') {
-        matchesCat = true;
-      } else if (cat.id == 'favorites') {
-        matchesCat = c.isFavorite;
-      } else if (cat.jioCategoryId != null) {
-        matchesCat = c.categoryId == cat.jioCategoryId;
-      } else {
-        matchesCat = true;
-      }
+    // 1. Filter all channels by language and search query
+    final channelsMatchingLangAndSearch = allChannels.where((c) {
+      final matchesLang = isAllLangs || selectedJioLangIds.contains(c.languageId);
+      if (!matchesLang) return false;
 
-      // 3. Search Filter
-      final bool matchesSearch;
-      if (query.isEmpty) {
-        matchesSearch = true;
-      } else {
-        final nameMatches = c.channelName.toLowerCase().contains(query);
-        final idMatches = c.channelId.toString().contains(query);
-        final langMatches = c.languageName.toLowerCase().contains(query);
-        final catMatches = c.categoryName.toLowerCase().contains(query);
-        matchesSearch = nameMatches || idMatches || langMatches || catMatches;
-      }
-
-      return matchesLang && matchesCat && matchesSearch;
+      if (query.isEmpty) return true;
+      final nameMatches = c.channelName.toLowerCase().contains(query);
+      final idMatches = c.channelId.toString().contains(query);
+      final langMatches = c.languageName.toLowerCase().contains(query);
+      final catMatches = c.categoryName.toLowerCase().contains(query);
+      return nameMatches || idMatches || langMatches || catMatches;
     }).toList();
 
-    filteredChannels.assignAll(filtered);
+    // 2. Build categorizedSections for category-wise splitting
+    final sections = <MapEntry<CategoryModel, List<ChannelModel>>>[];
+
+    for (final cat in categories) {
+      if (cat.id == 'all') continue;
+      if (!isAllCats && !selectedCategoryIds.contains(cat.id)) continue;
+
+      final catChannels = channelsMatchingLangAndSearch.where((c) {
+        if (cat.id == 'favorites') {
+          return c.isFavorite;
+        }
+        if (cat.jioCategoryId != null) {
+          return c.categoryId == cat.jioCategoryId;
+        }
+        return c.categoryName.toLowerCase() == cat.title.toLowerCase();
+      }).toList();
+
+      if (catChannels.isNotEmpty) {
+        sections.add(MapEntry(cat, catChannels));
+      }
+    }
+
+    categorizedSections.assignAll(sections);
+
+    // 3. Flat filtered list (for fallback or count)
+    if (isAllCats) {
+      filteredChannels.assignAll(channelsMatchingLangAndSearch);
+    } else {
+      final flat = <ChannelModel>[];
+      for (final entry in sections) {
+        flat.addAll(entry.value);
+      }
+      filteredChannels.assignAll(flat);
+    }
   }
 
   Future<void> onChannelFocused(ChannelModel channel) async {
+    _unfocusTimer?.cancel();
+    if (focusedChannel.value?.channelId == channel.channelId) return;
+
     focusedChannel.value = channel;
     isLoadingEpg.value = true;
+
+    // 1. Instant response: check if event/channel palette is already cached, else start with category seed
+    final cached = AmbientColorService.getCached(channel.channelName);
+    ambientPalette.value = cached ?? AmbientColorService.getSeedPalette(
+      channel.channelName,
+      channel.categoryName,
+    );
+
     try {
       final epg = await _channelRepo.getEpg(channel.channelId);
-      if (epg.isNotEmpty) {
-        currentProgram.value = epg.firstWhere(
-          (p) => p.isNowPlaying,
-          orElse: () => epg.first,
+      if (focusedChannel.value?.channelId == channel.channelId) {
+        final prog = epg.nowPlayingOrUpcoming;
+        currentProgram.value = prog;
+
+        // 2. Extract rich dynamic ambient palette directly from event photo artwork
+        final poster = prog?.posterUrl;
+        final targetImg = (poster != null && poster.trim().isNotEmpty)
+            ? poster
+            : channel.fullLogoUrl;
+
+        final pal = await AmbientColorService.extractPalette(
+          targetImg,
+          fallbackLogoUrl: channel.fullLogoUrl,
+          categoryName: channel.categoryName,
+          channelName: channel.channelName,
         );
-      } else {
-        currentProgram.value = null;
+
+        if (focusedChannel.value?.channelId == channel.channelId) {
+          ambientPalette.value = pal;
+        }
       }
     } catch (_) {
-      currentProgram.value = null;
+      if (focusedChannel.value?.channelId == channel.channelId) {
+        currentProgram.value = null;
+      }
+    } finally {
+      if (focusedChannel.value?.channelId == channel.channelId) {
+        isLoadingEpg.value = false;
+      }
     }
-    isLoadingEpg.value = false;
+  }
+
+  void onChannelUnfocused(ChannelModel channel) {
+    if (focusedChannel.value?.channelId == channel.channelId) {
+      _unfocusTimer?.cancel();
+      // Snappy 40ms debounce: bridges card gaps seamlessly, but returns to default immediately when exiting shelf
+      _unfocusTimer = Timer(const Duration(milliseconds: 40), () {
+        if (focusedChannel.value?.channelId == channel.channelId) {
+          focusedChannel.value = null;
+          currentProgram.value = null;
+          ambientPalette.value = AmbientPalette.defaultPalette;
+        }
+      });
+    }
   }
 
   Future<void> toggleFavorite(ChannelModel channel) async {
     await _channelRepo.toggleFavorite(channel);
     allChannels.refresh();
     _filterChannels();
-  }
-
-  Future<void> setDefaultQuality(QualityOption option) async {
-    defaultQuality.value = option;
-    await HiveService.setPreferredQualityOption(option);
   }
 
   void showDefaultQualityPicker() {
@@ -218,6 +369,10 @@ class HomeController extends GetxController {
       Get.toNamed(AppRoutes.auth);
       return;
     }
+    final pc = Get.find<PlayerController>();
+    pc.isMinimized.value = false;
+    pc.channelList = filteredChannels.toList();
+    pc.switchChannel(channel);
     Get.toNamed(
       AppRoutes.player,
       arguments: {
@@ -237,193 +392,30 @@ class HomeController extends GetxController {
     }
   }
 
-  void _showAccountDialog() {
-    final session = _authRepo.getCurrentSession();
+  AuthSession? get currentSession => _authRepo.getCurrentSession();
 
+  void openSettingsDialog() {
     Get.dialog(
-      Dialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 440),
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.unfocusedBorder),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: const BoxDecoration(
-                  gradient: AppColors.prismGradient,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.person_rounded, size: 36, color: Colors.white),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'PrismTV Profile',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                session?.mobileNumber ?? 'Connected User',
-                style: const TextStyle(fontSize: 16, color: AppColors.primary, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceCard,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.unfocusedBorder),
-                ),
-                child: Column(
-                  children: [
-                    _infoRow('Subscriber ID', session?.crmid.isNotEmpty == true ? session!.crmid : 'Active'),
-                    const Divider(color: AppColors.unfocusedBorder, height: 16),
-                    _infoRow('Service Tier', 'PrismTV Live Streaming'),
-                    const Divider(color: AppColors.unfocusedBorder, height: 16),
-                    _infoRow('Device Target', 'PrismTV Smart TV / Web'),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Default Quality Setting Card
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceCard,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.unfocusedBorder),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        gradient: AppColors.prismGradient,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.tune_rounded, size: 20, color: Colors.white),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Default Resolution',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Auto-selected on playback',
-                            style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Clickable Quality Selector Pill
-                    Focus(
-                      child: Builder(
-                        builder: (ctx) {
-                          final hasFocus = Focus.of(ctx).hasFocus;
-                          return InkWell(
-                            onTap: () => showDefaultQualityPicker(),
-                            borderRadius: BorderRadius.circular(8),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: hasFocus ? AppColors.focusedBackground : AppColors.surfaceElevated,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: hasFocus ? AppColors.primary : AppColors.unfocusedBorder,
-                                  width: hasFocus ? 1.5 : 1.0,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Obx(
-                                    () => Text(
-                                      defaultQuality.value.label.split(' ')[0], // e.g. "Auto" or "1080p"
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: hasFocus ? Colors.white : AppColors.primaryLight,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.arrow_drop_down_rounded, size: 18, color: AppColors.primaryLight),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        side: const BorderSide(color: AppColors.unfocusedBorder),
-                      ),
-                      onPressed: () => Get.back(),
-                      child: const Text('Back', style: TextStyle(color: Colors.white)),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.liveRed,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () {
-                        Get.back();
-                        logout();
-                      },
-                      child: const Text('Log Out', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+      SettingsDialog(controller: this),
+      barrierColor: Colors.black.withValues(alpha: 0.65),
     );
   }
 
-  Widget _infoRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-        Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
-      ],
+  void _showAccountDialog() {
+    Get.dialog(
+      AccountDialog(controller: this),
+      barrierColor: Colors.black.withValues(alpha: 0.65),
     );
+  }
+
+  void setDefaultQuality(QualityOption opt) {
+    defaultQuality.value = opt;
+    HiveService.setPreferredQualityOption(opt);
+    if (Get.isRegistered<PlayerController>()) {
+      final pc = Get.find<PlayerController>();
+      pc.selectedQualityOption.value = opt;
+      pc.selectedQuality.value = opt.id == 'auto' ? 'Auto' : '${opt.targetHeight}p';
+    }
   }
 
   void logout() async {

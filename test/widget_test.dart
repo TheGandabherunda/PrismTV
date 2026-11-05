@@ -79,15 +79,15 @@ void main() {
       expect(categories.any((c) => c.id == 'movies'), isTrue);
     });
 
-    test('QualityOption includes Auto, 1080p, 720p, 480p, 360p, and 240p', () {
+    test('QualityOption includes Auto, 1080p, 720p, 540p, 360p, and 180p', () {
       final options = QualityOption.defaultOptions;
 
       expect(options.any((o) => o.id == 'auto'), isTrue);
       expect(options.any((o) => o.id == '1080p' && o.targetHeight == 1080), isTrue);
       expect(options.any((o) => o.id == '720p' && o.targetHeight == 720), isTrue);
-      expect(options.any((o) => o.id == '480p' && o.targetHeight == 480), isTrue);
+      expect(options.any((o) => o.id == '540p' && o.targetHeight == 540), isTrue);
       expect(options.any((o) => o.id == '360p' && o.targetHeight == 360), isTrue);
-      expect(options.any((o) => o.id == '240p' && o.targetHeight == 240), isTrue);
+      expect(options.any((o) => o.id == '180p' && o.targetHeight == 180), isTrue);
     });
   });
 }

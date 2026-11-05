@@ -6,10 +6,17 @@ import 'core/storage/hive_service.dart';
 import 'data/providers/jio_live_source.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/channel_repository.dart';
+import 'views/player/player_controller.dart';
 import 'routes/app_pages.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Override Flutter error widget to prevent grey error boxes across web/release UI
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    debugPrint('[FLUTTER_ERROR] ${details.exception}');
+    return const SizedBox.shrink();
+  };
 
   // Smart TV Fullscreen / Leanback flags
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -22,6 +29,7 @@ void main() async {
   Get.put<JioLiveSource>(jioSource, permanent: true);
   Get.put<AuthRepository>(AuthRepository(jioSource), permanent: true);
   Get.put<ChannelRepository>(ChannelRepository(jioSource), permanent: true);
+  Get.put<PlayerController>(PlayerController(), permanent: true);
 
   runApp(const PrismTvApp());
 }
@@ -35,7 +43,18 @@ class PrismTvApp extends StatelessWidget {
       title: 'PrismTV',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
-      theme: ThemeData.dark().copyWith(
+      theme: ThemeData.light().copyWith(
+        scaffoldBackgroundColor: AppColors.lightBackground,
+        primaryColor: AppColors.primary,
+        colorScheme: const ColorScheme.light(
+          primary: AppColors.primary,
+          secondary: AppColors.secondary,
+          surface: AppColors.lightSurface,
+        ),
+        focusColor: AppColors.focusedBorder,
+        hoverColor: AppColors.primaryGlow,
+      ),
+      darkTheme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: AppColors.background,
         primaryColor: AppColors.primary,
         colorScheme: const ColorScheme.dark(

@@ -25,9 +25,39 @@ class ChannelModel {
     this.isFavorite = false,
   });
 
+  static final ChannelModel fallback = ChannelModel(
+    channelId: 3585,
+    channelName: 'Sony Sports Ten 4 HD',
+    logoUrl: '',
+    categoryId: 3,
+    categoryName: 'Sports',
+    languageId: 13,
+    languageName: 'Kannada',
+  );
+
   String get fullLogoUrl {
     if (logoUrl.startsWith('http')) return logoUrl;
     return '${ApiEndpoints.channelLogoBaseUrl}$logoUrl';
+  }
+
+  String get languageCode {
+    switch (languageId) {
+      case 13: return 'kn'; // Kannada
+      case 11: return 'te'; // Telugu
+      case 8:  return 'ta'; // Tamil
+      case 7:  return 'ml'; // Malayalam
+      case 1:  return 'hi'; // Hindi
+      case 2:  return 'mr'; // Marathi
+      case 5:  return 'bn'; // Bengali
+      case 9:  return 'gu'; // Gujarati
+      case 3:  return 'pa'; // Punjabi
+      case 4:  return 'ur'; // Urdu
+      case 10: return 'or'; // Odia
+      case 12: return 'bho'; // Bhojpuri
+      case 14: return 'as'; // Assamese
+      case 6:  return 'en'; // English
+      default: return 'en';
+    }
   }
 
   factory ChannelModel.fromJson(Map<String, dynamic> json) {

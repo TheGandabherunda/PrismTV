@@ -1,0 +1,17 @@
+{
+  "id": "com.thegandabherunda.prismtv",
+  "version": "1.0.0",
+  "vendor": "TheGandabherunda",
+  "type": "web",
+  "main": "index.html",
+  "title": "PrismTV",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "resolution": "1920x1080",
+  "requiredVersion": "1.0.0",
+  "bgColor": "#1c1613",
+  "splashBackground": "splash.png",
+  "handlesRelaunch": true,
+  "supportAudioGuidance": true
+}
+

@@ -101,45 +101,52 @@ class AuthController extends GetxController {
   Future<void> sendOtp() async {
     final phone = phoneNumber.value.trim();
     if (phone.length != 10) {
-      _showFeedback('Please enter a valid 10-digit mobile number', error: true);
+      _showFeedback('Please enter a valid 10-digit Jio mobile number', error: true);
       return;
     }
 
     isLoading.value = true;
-    _showFeedback('Requesting OTP from Jio authorization servers...');
+    _showFeedback('Sending OTP to your Jio number...');
 
     final success = await _authRepo.requestOtp(phone);
     isLoading.value = false;
 
     if (success) {
       isOtpSent.value = true;
-      _showFeedback('OTP sent successfully to +91 $phone');
+      _showFeedback('Verification OTP sent to +91 $phone');
       _startCountdown();
     } else {
-      _showFeedback('Unable to send OTP. Please check the number and try again.', error: true);
+      _showFeedback('Unable to send OTP. Please check your Jio number and try again.', error: true);
     }
   }
 
   Future<void> verifyOtp() async {
     final otp = otpCode.value.trim();
     if (otp.length != 6) {
-      _showFeedback('Please enter the 6-digit OTP', error: true);
+      _showFeedback('Please enter the 6-digit verification code', error: true);
       return;
     }
 
     isLoading.value = true;
-    _showFeedback('Verifying session tokens...');
+    _showFeedback('Verifying OTP with Jio servers...');
 
     final session = await _authRepo.loginWithOtp(phoneNumber.value.trim(), otp);
     isLoading.value = false;
 
     if (session != null && session.isValid) {
-      _showFeedback('Authentication successful! Loading live channels...');
-      await Future.delayed(const Duration(milliseconds: 600));
-      Get.offAllNamed(AppRoutes.home);
+      _showFeedback('Verification successful! Welcome to PrismTV.');
+      await Future.delayed(const Duration(milliseconds: 300));
+      Get.offAllNamed(AppRoutes.splash);
     } else {
       _showFeedback('Invalid OTP. Please check the code and try again.', error: true);
     }
+  }
+
+  void changeNumber() {
+    isOtpSent.value = false;
+    otpCode.value = '';
+    _timer?.cancel();
+    _showFeedback('');
   }
 
   void _startCountdown() {

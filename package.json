@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "build:web": "flutter build web --release",
+    "build:webos": "node scripts/build_webos.js",
     "build:apk": "flutter build apk --release",
+    "build:apk:splits": "flutter build apk --release --split-per-abi && node scripts/package_apks.js",
+    "package": "node scripts/package_apks.js",
     "test": "flutter test",
     "analyze": "flutter analyze"
   },

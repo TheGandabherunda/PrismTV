@@ -11,8 +11,10 @@ const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.wasm': 'application/wasm',
+  '.map': 'application/json',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
@@ -96,6 +98,38 @@ const channelSlugToIdMap = new Map([
   ['ColorsSuper_MOB', '759'],
   ['Pogo_Kan_MOB', '712'],
 ]);
+
+const CANONICAL_LANG_MAP = {
+  'kn': 'kn', 'kan': 'kn', 'kannada': 'kn',
+  'te': 'te', 'tel': 'te', 'telugu': 'te',
+  'ta': 'ta', 'tam': 'ta', 'tamil': 'ta',
+  'ml': 'ml', 'mal': 'ml', 'malayalam': 'ml',
+  'hi': 'hi', 'hin': 'hi', 'hindi': 'hi',
+  'en': 'en', 'eng': 'en', 'english': 'en',
+  'mr': 'mr', 'mar': 'mr', 'marathi': 'mr',
+  'bn': 'bn', 'ben': 'bn', 'bengali': 'bn', 'bangla': 'bn',
+  'gu': 'gu', 'guj': 'gu', 'gujarati': 'gu',
+  'pa': 'pa', 'pan': 'pa', 'punjabi': 'pa',
+  'or': 'or', 'ori': 'or', 'odia': 'or', 'oriya': 'or',
+  'bho': 'bho', 'bhojpuri': 'bho',
+  'as': 'as', 'asm': 'as', 'assamese': 'as'
+};
+
+function getCanonicalLang(code) {
+  if (!code) return '';
+  const c = String(code).toLowerCase().trim();
+  return CANONICAL_LANG_MAP[c] || c;
+}
+
+function isSameLanguage(a, b) {
+  if (!a || !b) return false;
+  const ca = getCanonicalLang(a);
+  const cb = getCanonicalLang(b);
+  if (ca && cb && ca === cb) return true;
+  const la = String(a).toLowerCase().trim();
+  const lb = String(b).toLowerCase().trim();
+  return la === lb || la.startsWith(lb) || lb.startsWith(la);
+}
 
 function findChannelIdFromUrl(targetUrl) {
   if (!targetUrl) return '';
@@ -424,6 +458,7 @@ function generateDateTime() {
     const qCrm = parsedUrl.searchParams.get('crmid') || '';
     const qUnique = parsedUrl.searchParams.get('uniqueid') || '';
     const qChannelId = parsedUrl.searchParams.get('channel_id') || '';
+    const qLang = parsedUrl.searchParams.get('lang') || '';
 
     updateSession({
       ssoToken: qSso,
@@ -547,11 +582,21 @@ function generateDateTime() {
           proxyRes.setEncoding('utf8');
           proxyRes.on('data', chunk => body += chunk);
           proxyRes.on('end', () => {
+            const hasVideo = body.includes('contentType="video"') || body.includes("contentType='video'");
+            const hasAudio = body.includes('contentType="audio"') || body.includes("contentType='audio'");
+            if (!hasVideo) {
+              console.warn(`[STREAM PROXY WARNING] MPD for channel ${activeChannelId || 'unknown'} has NO video AdaptationSet (Audio-only stream)`);
+            }
+            if (!hasAudio) {
+              console.warn(`[STREAM PROXY WARNING] MPD for channel ${activeChannelId || 'unknown'} has NO audio AdaptationSet (Video-only stream)`);
+            }
+
             const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
             const hdneaPart = effectiveHdnea ? `hdnea/${encodeURIComponent(effectiveHdnea)}/` : '';
             const chPart = activeChannelId ? `ch/${activeChannelId}/` : '';
 
             let rewritten = body;
+
             if (rewritten.includes('<BaseURL>')) {
               rewritten = rewritten.replace(/<BaseURL>([^<]+)<\/BaseURL>/g, (match, rel) => {
                 const fullBase = new URL(rel, baseUrl).toString();
@@ -576,6 +621,8 @@ function generateDateTime() {
               'Access-Control-Expose-Headers': '*',
               'Cache-Control': 'no-cache',
             };
+            if (!hasVideo) respHeaders['X-Stream-Audio-Only'] = '1';
+            if (!hasAudio) respHeaders['X-Stream-Video-Only'] = '1';
             res.writeHead(proxyRes.statusCode, respHeaders);
             res.end(rewritten);
           });
@@ -590,7 +637,36 @@ function generateDateTime() {
             const baseUrl = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
             const parentSearch = u.search;
 
-            const lines = body.split('\n');
+            let lines = body.split('\n');
+
+            // If target language is provided, strictly mark it as DEFAULT=YES in all HLS audio groups
+            if (qLang) {
+              const hasTargetLang = lines.some(line => {
+                if (!line.includes('TYPE=AUDIO')) return false;
+                const langMatch = line.match(/LANGUAGE=["']?([^"'\s,]+)["']?/i);
+                return langMatch && isSameLanguage(langMatch[1], qLang);
+              });
+
+              if (hasTargetLang) {
+                lines = lines.map(line => {
+                  if (line.includes('TYPE=AUDIO')) {
+                    const langMatch = line.match(/LANGUAGE=["']?([^"'\s,]+)["']?/i);
+                    const isTarget = langMatch && isSameLanguage(langMatch[1], qLang);
+                    if (isTarget) {
+                      if (line.includes('DEFAULT=NO')) {
+                        line = line.replace('DEFAULT=NO', 'DEFAULT=YES');
+                      } else if (!line.includes('DEFAULT=YES')) {
+                        line = line.replace('AUTOSELECT=YES', 'DEFAULT=YES,AUTOSELECT=YES');
+                      }
+                    } else {
+                      line = line.replace('DEFAULT=YES', 'DEFAULT=NO');
+                    }
+                  }
+                  return line;
+                });
+              }
+            }
+
             const rewritten = lines.map(line => {
               const trimmed = line.trim();
               if (!trimmed || trimmed.startsWith('#')) {
@@ -610,6 +686,7 @@ function generateDateTime() {
                     if (activeCrm) proxyUri += `&crmid=${encodeURIComponent(activeCrm)}`;
                     if (activeChannelId) proxyUri += `&channel_id=${encodeURIComponent(activeChannelId)}`;
                     if (effectiveHdnea) proxyUri += `&hdnea=${encodeURIComponent(effectiveHdnea)}`;
+                    if (qLang) proxyUri += `&lang=${encodeURIComponent(qLang)}`;
 
                     return `URI="${proxyUri}"`;
                   });
@@ -632,6 +709,7 @@ function generateDateTime() {
               if (activeSso) proxySegment += `&ssotoken=${encodeURIComponent(activeSso)}`;
               if (activeChannelId) proxySegment += `&channel_id=${encodeURIComponent(activeChannelId)}`;
               if (effectiveHdnea) proxySegment += `&hdnea=${encodeURIComponent(effectiveHdnea)}`;
+              if (qLang) proxySegment += `&lang=${encodeURIComponent(qLang)}`;
 
               return proxySegment;
             }).join('\n');
@@ -845,6 +923,7 @@ function generateDateTime() {
   if (reqPath === '/' || reqPath === '') {
     reqPath = '/index.html';
   }
+  console.log('[STATIC]', req.method, reqPath);
 
   const safePath = path.normalize(reqPath).replace(/^(\.\.[\/\\])+/, '');
   let filePath = path.join(WEB_ROOT, safePath);
@@ -870,6 +949,8 @@ function generateDateTime() {
     res.writeHead(200, {
       'Content-Type': contentType,
       'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0',

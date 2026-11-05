@@ -1,12 +1,31 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Network & Internet Access -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
 
+    <!-- Prevent screen sleep during video / TV playback -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
+    <!-- Foreground playback for continuous audio/video streaming -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+
+    <!-- Ensure compatibility across all devices: Android TV, Google TV, Fire TV, tablets, phones -->
     <uses-feature
         android:name="android.software.leanback"
         android:required="false" />
     <uses-feature
         android:name="android.hardware.touchscreen"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.wifi"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.screen.portrait"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.screen.landscape"
         android:required="false" />
 
     <application
@@ -14,7 +33,8 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:hardwareAccelerated="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -23,6 +43,7 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
+            android:supportsPictureInPicture="true"
             android:windowSoftInputMode="adjustResize">
             <!-- Specifies an Android theme to apply to this Activity as soon as
                  the Android process has started. This theme is visible to the user

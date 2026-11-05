@@ -38,7 +38,9 @@ class AppPages {
       name: AppRoutes.player,
       page: () => const PlayerView(),
       binding: BindingsBuilder(() {
-        Get.put<PlayerController>(PlayerController());
+        if (!Get.isRegistered<PlayerController>()) {
+          Get.put<PlayerController>(PlayerController(), permanent: true);
+        }
       }),
     ),
   ];

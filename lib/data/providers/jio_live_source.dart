@@ -207,8 +207,16 @@ class JioLiveSource implements ILiveTvSource {
     return _buildSampleChannels();
   }
 
+  final Map<int, (DateTime, List<EpgProgramModel>)> _epgCache = {};
+
   @override
   Future<List<EpgProgramModel>> fetchEpg(int channelId) async {
+    final now = DateTime.now();
+    final cached = _epgCache[channelId];
+    if (cached != null && now.difference(cached.$1).inMinutes < 15) {
+      return cached.$2;
+    }
+
     try {
       final uri = Uri.parse('${ApiEndpoints.epgUrl}?offset=0&channel_id=$channelId');
       final response = await http.get(
@@ -219,26 +227,25 @@ class JioLiveSource implements ILiveTvSource {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List<dynamic> list = data['epg'] ?? [];
-        return list
+        final parsed = list
             .map((item) => EpgProgramModel.fromJson(item as Map<String, dynamic>))
             .toList();
+        if (parsed.isNotEmpty) {
+          _epgCache[channelId] = (now, parsed);
+          return parsed;
+        }
       }
     } catch (_) {}
 
     // Fallback EPG entry
-    final now = DateTime.now();
+    final fallbackStart = now.subtract(const Duration(minutes: 15));
+    final fallbackEnd = now.add(const Duration(minutes: 45));
     return [
       EpgProgramModel(
         showName: 'Live Broadcast',
         description: 'Now streaming on PrismTV live broadcast network.',
-        startTime: now.subtract(const Duration(minutes: 15)),
-        endTime: now.add(const Duration(minutes: 45)),
-      ),
-      EpgProgramModel(
-        showName: 'Prime Time Spotlight',
-        description: 'Upcoming scheduled prime time feature broadcast.',
-        startTime: now.add(const Duration(minutes: 45)),
-        endTime: now.add(const Duration(minutes: 105)),
+        startTime: fallbackStart,
+        endTime: fallbackEnd,
       ),
     ];
   }
@@ -309,32 +316,31 @@ class JioLiveSource implements ILiveTvSource {
         // (1920x1080 at 2.3+ Mbps AVC High Profile), whereas HLS mobile feeds are capped by Jio at 360p.
         String rawStreamUrl = '';
         String drmLicenseUrl = '';
+        String hlsFallbackUrl = '';
+
+        // Extract HLS stream URL from result or bitrates for fallback/native
+        hlsFallbackUrl = (data['result'] as String?) ?? '';
+        if (hlsFallbackUrl.isEmpty && bitrates != null) {
+          hlsFallbackUrl = (bitrates['auto'] as String?) ?? (bitrates['high'] as String?) ?? '';
+        }
 
         if (kIsWeb) {
           // On Web, Shaka Player natively decrypts Widevine MPEG-DASH for authentic 1080p Full HD broadcast
           if (mpd != null) {
             final mpdBitrates = mpd['bitrates'] as Map<String, dynamic>?;
-            // Prefer mpd.bitrates.high which contains 1080p + 720p representations (minrate=840000)
-            // while preserving all audio tracks. Fallback to mpd.result or mpd.bitrates.auto.
-            final highMpd = mpdBitrates != null ? (mpdBitrates['high'] as String? ?? mpdBitrates['auto'] as String?) : null;
-            rawStreamUrl = highMpd ?? (mpd['result'] as String?) ?? '';
+            // Prefer mpd.result (minrate=80000) which contains ALL representations from 180p up to 1080p,
+            // preventing Broadpeak packager from stripping video on SD channels. Shaka ABR automatically
+            // selects 1080p Full HD for HD channels via defaultBandwidthEstimate. Fallback to bitrates.
+            final autoMpd = mpdBitrates != null ? (mpdBitrates['auto'] as String? ?? mpdBitrates['high'] as String?) : null;
+            rawStreamUrl = (mpd['result'] as String?) ?? autoMpd ?? '';
             drmLicenseUrl = (mpd['key'] as String?) ?? '';
           }
           if (rawStreamUrl.isEmpty) {
-            rawStreamUrl = data['result'] ?? '';
-            if (rawStreamUrl.isEmpty && bitrates != null) {
-              rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? '';
-            }
+            rawStreamUrl = hlsFallbackUrl;
           }
         } else {
           // On Native Android TV / Mobile, standard video_player uses ExoPlayer for HLS streams.
-          // Fallback to result or bitrates.auto, and strip destructive minrate that removes video tracks.
-          rawStreamUrl = data['result'] ?? '';
-          if (rawStreamUrl.isEmpty && bitrates != null) {
-            rawStreamUrl = bitrates['auto'] ?? bitrates['high'] ?? '';
-          }
-          // Remove destructive minrate that strips video track on Jio's Broadpeak packager
-          rawStreamUrl = rawStreamUrl.replaceAll(RegExp(r'[?&]minrate=\d+'), '');
+          rawStreamUrl = hlsFallbackUrl;
           if (rawStreamUrl.isEmpty && mpd != null) {
             rawStreamUrl = (mpd['result'] as String?) ?? '';
             drmLicenseUrl = (mpd['key'] as String?) ?? '';
@@ -354,6 +360,23 @@ class JioLiveSource implements ILiveTvSource {
             rawStreamUrl = '$rawStreamUrl${sep}hdnea=$hdnea';
           }
 
+          // Build proxied HLS fallback URL if DASH stream has missing video/audio
+          String proxiedHlsFallback = '';
+          if (hlsFallbackUrl.isNotEmpty && kIsWeb) {
+            final hlsMatch = RegExp(r'hdnea=([^&]+)').firstMatch(hlsFallbackUrl);
+            final hlsHdnea = hlsMatch?.group(1) ?? hdnea;
+            final hlsParams = <String, String>{
+              'url': hlsFallbackUrl,
+              'channel_id': effectiveChannelId.toString(),
+              if (hlsHdnea.isNotEmpty) 'hdnea': hlsHdnea,
+              'lang': channel.languageCode,
+            };
+            final hlsQuery = hlsParams.entries
+                .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+                .join('&');
+            proxiedHlsFallback = '${ApiEndpoints.streamProxyUrl}?$hlsQuery';
+          }
+
           // On Web, route through local stream proxy to bypass browser CORS and deliver authentication
           final queryParams = <String, String>{
             'url': rawStreamUrl,
@@ -364,6 +387,8 @@ class JioLiveSource implements ILiveTvSource {
             'uniqueid': session.uniqueId,
             'channel_id': effectiveChannelId.toString(),
             if (hdnea.isNotEmpty) 'hdnea': hdnea,
+            if (proxiedHlsFallback.isNotEmpty) 'hls_fallback': proxiedHlsFallback,
+            'lang': channel.languageCode,
           };
           final queryString = queryParams.entries
               .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
