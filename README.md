@@ -24,6 +24,23 @@
 
 ---
 
+## 📥 Download Installable Packages
+
+Pre-compiled, ready-to-install packages are published directly on **[GitHub Releases](https://github.com/TheGandabherunda/PrismTV/releases)**:
+
+| Platform | Recommended Package | Description |
+| :--- | :--- | :--- |
+| 📺 **Android TV / Google TV / Fire TV** | **[PrismTV-universal.apk](https://github.com/TheGandabherunda/PrismTV/releases/latest)** | Universal installer compatible with all TV streaming boxes & Smart TVs |
+| 📱 **Android Mobile & Tablets** | **[PrismTV-universal.apk](https://github.com/TheGandabherunda/PrismTV/releases/latest)** | Optimized touch UI with swipe controls & PiP miniplayer |
+| ⚡ **Modern 64-bit Devices** | **[PrismTV-arm64-v8a.apk](https://github.com/TheGandabherunda/PrismTV/releases/latest)** | Smaller footprint APK for 64-bit devices |
+| 📺 **Fire TV Sticks & 32-bit TVs** | **[PrismTV-armeabi-v7a.apk](https://github.com/TheGandabherunda/PrismTV/releases/latest)** | Optimized for 32-bit ARM hardware |
+| 🖥️ **LG webOS Smart TV** | **[PrismTV-webOS.ipk](https://github.com/TheGandabherunda/PrismTV/releases/latest)** | Native webOS installer package |
+
+> [!NOTE]
+> **Zero Configuration Required**: Install the APK on your TV or phone, log in with your mobile number, and start streaming. No daemons, no proxies, and no external servers required.
+
+---
+
 ## 🌟 Overview
 
 **PrismTV** is a high-performance, universal live streaming platform engineered from the ground up for both the **10-foot television experience** (Android TV, Google TV, Fire TV, webOS) and **touch mobile devices** (Android phones, tablets, mobile web, and desktop).
@@ -164,14 +181,24 @@ flutter run -d chrome
 
 ### 3. Build Production Releases
 ```bash
-# Android Universal APK (TV & Mobile)
+# Android Universal APK (Smart TV, Fire TV & Mobile)
 flutter build apk --release
 
-# Split Per-ABI APKs (smaller file size for arm64-v8a / armeabi-v7a)
+# Split Per-ABI APKs (optimized sizes for arm64-v8a / armeabi-v7a)
 flutter build apk --split-per-abi --release
 
-# Web Production Bundle
+# LG webOS Smart TV Package (.ipk)
+node scripts/build_webos.js
+```
+
+### 4. Running Web Locally (For Local Testing)
+```bash
+# Build the local web bundle
 flutter build web --release
+
+# Launch local testing server
+node server.js
+# Open http://localhost:3000
 ```
 
 ---

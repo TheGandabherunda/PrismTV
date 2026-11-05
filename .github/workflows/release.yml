@@ -103,10 +103,10 @@ jobs:
           retention-days: 14
 
   # ==========================================
-  # 2. WEB APPLICATION & LG WEBOS TV (.IPK)
+  # 2. LG WEBOS SMART TV PACKAGE (.IPK)
   # ==========================================
-  build_web_and_webos:
-    name: Build Web & LG webOS (.ipk)
+  build_webos:
+    name: Build LG webOS (.ipk)
     runs-on: ubuntu-latest
 
     steps:
@@ -129,7 +129,7 @@ jobs:
       - name: Install Flutter Dependencies
         run: flutter pub get
 
-      - name: Build Flutter Web Application
+      - name: Build Flutter Web Application for webOS
         run: flutter build web --release
 
       - name: Install webOS CLI Tools
@@ -138,24 +138,15 @@ jobs:
       - name: Build LG webOS Package (.ipk)
         run: node scripts/build_webos.js
 
-      - name: Package Web Distribution Archive
+      - name: Package webOS Distribution
         run: |
-          mkdir -p artifacts/web artifacts/webos
-          cd build/web && zip -r ../../artifacts/web/PrismTV-Web.zip . && cd ../..
+          mkdir -p artifacts/webos
           if [ -f "dist/PrismTV-webOS.ipk" ]; then
             cp dist/PrismTV-webOS.ipk artifacts/webos/PrismTV-webOS.ipk
           else
             cp dist/*.ipk artifacts/webos/PrismTV-webOS.ipk
           fi
-          ls -la artifacts/web
           ls -la artifacts/webos
-
-      - name: Upload Web Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: PrismTV-Web
-          path: artifacts/web/
-          retention-days: 14
 
       - name: Upload LG webOS Artifact
         uses: actions/upload-artifact@v4
@@ -209,7 +200,7 @@ jobs:
   # ==========================================
   publish_release:
     name: Publish GitHub Release
-    needs: [build_android, build_web_and_webos, build_macos]
+    needs: [build_android, build_webos, build_macos]
     if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == 'true' || github.event.inputs.create_release == true
     runs-on: ubuntu-latest
 
@@ -221,12 +212,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: PrismTV-Android-APKs
-          path: release-files
-
-      - name: Download Web Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: PrismTV-Web
           path: release-files
 
       - name: Download webOS Artifact

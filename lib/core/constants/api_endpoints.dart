@@ -2,20 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../storage/hive_service.dart';
 
 class ApiEndpoints {
-  // Base URLs (Automatically adapts for Native Android TV vs Web Browser Preview vs Subpath Hosting)
-  static String get webSubpathPrefix {
-    if (!kIsWeb) return '';
-    try {
-      final path = Uri.base.path;
-      final lower = path.toLowerCase();
-      final idx = lower.indexOf('/prismtv');
-      if (idx != -1) {
-        return path.substring(idx, idx + '/prismtv'.length);
-      }
-    } catch (_) {}
-    return '';
-  }
-
+  // Base URLs (Direct Native Connections for Android TV & Mobile; Local Proxy for Web Dev)
   static String get proxyHost {
     if (!kIsWeb) return '';
     try {
@@ -30,14 +17,12 @@ class ApiEndpoints {
   static String get _apiBase {
     if (!kIsWeb) return 'https://jiotvapi.media.jio.com';
     if (proxyHost.isNotEmpty) return '$proxyHost/api/proxy';
-    return '$webSubpathPrefix/api/proxy';
+    return '/api/proxy';
   }
 
   static String get streamProxyUrl {
     if (proxyHost.isNotEmpty) return '$proxyHost/api/stream-proxy';
-    return webSubpathPrefix.isNotEmpty
-        ? '$webSubpathPrefix/api/stream-proxy'
-        : '/api/stream-proxy';
+    return '/api/stream-proxy';
   }
 
   // Authentication & SSO
@@ -46,10 +31,10 @@ class ApiEndpoints {
   static String get refreshOtpUrl {
     if (!kIsWeb) return 'https://tv.media.jio.com/apis/v2.0/loginotp/refresh?langId=6';
     if (proxyHost.isNotEmpty) return '$proxyHost/api/proxy/apis/v2.0/loginotp/refresh?langId=6';
-    return '$webSubpathPrefix/api/proxy/apis/v2.0/loginotp/refresh?langId=6';
+    return '/api/proxy/apis/v2.0/loginotp/refresh?langId=6';
   }
 
-  // Catalog & Channels (Public CDN with open CORS)
+  // Catalog & Channels (Public CDN with open access)
   static const String channelListUrl =
       'https://jiotv.data.cdn.jio.com/apis/v3.1/getMobileChannelList/get/?os=android&devicetype=phone&usertype=tvYR7NSNn7rymo3F';
   static const String channelLogoBaseUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/';
