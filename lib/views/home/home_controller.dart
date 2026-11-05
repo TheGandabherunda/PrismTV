@@ -38,6 +38,7 @@ class HomeController extends GetxController {
 
   final TextEditingController searchController = TextEditingController();
   final RxString searchQuery = ''.obs;
+  final RxBool isMobileSearchOpen = false.obs;
 
   final Rxn<ChannelModel> focusedChannel = Rxn<ChannelModel>();
   final Rxn<EpgProgramModel> currentProgram = Rxn<EpgProgramModel>();
@@ -217,6 +218,15 @@ class HomeController extends GetxController {
     searchQuery.value = '';
     _filterChannels();
     _refreshFocusedChannel();
+  }
+
+  void openMobileSearch() {
+    isMobileSearchOpen.value = true;
+  }
+
+  void closeMobileSearch() {
+    isMobileSearchOpen.value = false;
+    clearSearch();
   }
 
   void _filterChannels() {

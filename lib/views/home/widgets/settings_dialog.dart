@@ -34,17 +34,22 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
     return Dialog(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 24,
+        vertical: isMobile ? 16 : 24,
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: BackdropFilter(
           filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
           child: Container(
-            width: 780,
-            height: 590,
+            width: isMobile ? double.infinity : 780,
+            height: isMobile ? MediaQuery.of(context).size.height * 0.88 : 590,
             decoration: BoxDecoration(
               color: const Color(0xF210121C),
               borderRadius: BorderRadius.circular(24),
@@ -66,7 +71,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 _buildHeader(),
 
                 // 2. Navigation Tabs Bar (Remote D-Pad Navigable)
-                _buildTabsBar(),
+                _buildTabsBar(isMobile),
 
                 const Divider(height: 1, color: Color(0x1FFFFFFF)),
 
@@ -75,8 +80,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   child: IndexedStack(
                     index: _activeTabIndex,
                     children: [
-                      _buildCategoriesTab(),
-                      _buildLanguagesTab(),
+                      _buildCategoriesTab(isMobile),
+                      _buildLanguagesTab(isMobile),
                       _buildResolutionTab(),
                       _buildStreamServerTab(),
                       _buildRemoteGuideTab(),
@@ -156,7 +161,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     );
   }
 
-  Widget _buildTabsBar() {
+  Widget _buildTabsBar(bool isMobile) {
     final tabs = [
       {'title': 'Categories', 'icon': Icons.category_rounded},
       {'title': 'Languages', 'icon': Icons.translate_rounded},
@@ -165,84 +170,112 @@ class _SettingsDialogState extends State<SettingsDialog> {
       {'title': 'Remote & Keys', 'icon': Icons.settings_remote_rounded},
     ];
 
+    Widget buildTabItem(int index) {
+      final isSelected = _activeTabIndex == index;
+      final tab = tabs[index];
+
+      return Focus(
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter ||
+                event.logicalKey == LogicalKeyboardKey.space) {
+              setState(() => _activeTabIndex = index);
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Builder(
+          builder: (ctx) {
+            final hasFocus = Focus.of(ctx).hasFocus;
+            return InkWell(
+              onTap: () => setState(() => _activeTabIndex = index),
+              borderRadius: BorderRadius.circular(12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 12 : 6,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : (hasFocus ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: hasFocus
+                        ? Colors.white
+                        : (isSelected
+                            ? AppColors.primaryLight.withValues(alpha: 0.5)
+                            : Colors.transparent),
+                    width: hasFocus || isSelected ? 1.4 : 1.0,
+                  ),
+                  boxShadow: hasFocus
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primaryGlow.withValues(alpha: 0.35),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      tab['icon'] as IconData,
+                      size: 15,
+                      color: isSelected || hasFocus ? Colors.white : Colors.white54,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      tab['title'] as String,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: isSelected || hasFocus ? FontWeight.w700 : FontWeight.w500,
+                        color: isSelected || hasFocus ? Colors.white : Colors.white60,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    if (isMobile) {
+      return Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(tabs.length, (index) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: buildTabItem(index),
+              );
+            }),
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: List.generate(tabs.length, (index) {
-          final isSelected = _activeTabIndex == index;
-          final tab = tabs[index];
-
           return Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: Focus(
-                onKeyEvent: (node, event) {
-                  if (event is KeyDownEvent) {
-                    if (event.logicalKey == LogicalKeyboardKey.select ||
-                        event.logicalKey == LogicalKeyboardKey.enter ||
-                        event.logicalKey == LogicalKeyboardKey.space) {
-                      setState(() => _activeTabIndex = index);
-                      return KeyEventResult.handled;
-                    }
-                  }
-                  return KeyEventResult.ignored;
-                },
-                child: Builder(
-                  builder: (ctx) {
-                    final hasFocus = Focus.of(ctx).hasFocus;
-                    return InkWell(
-                      onTap: () => setState(() => _activeTabIndex = index),
-                      borderRadius: BorderRadius.circular(12),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        padding: const EdgeInsets.symmetric(vertical: 9),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? Colors.white.withValues(alpha: 0.12)
-                              : (hasFocus ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: hasFocus
-                                ? Colors.white
-                                : (isSelected
-                                    ? AppColors.primaryLight.withValues(alpha: 0.5)
-                                    : Colors.transparent),
-                            width: hasFocus || isSelected ? 1.4 : 1.0,
-                          ),
-                          boxShadow: hasFocus
-                              ? [
-                                  BoxShadow(
-                                    color: AppColors.primaryGlow.withValues(alpha: 0.35),
-                                    blurRadius: 10,
-                                    spreadRadius: 1,
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              tab['icon'] as IconData,
-                              size: 15,
-                              color: isSelected || hasFocus ? Colors.white : Colors.white54,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              tab['title'] as String,
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: isSelected || hasFocus ? FontWeight.w700 : FontWeight.w500,
-                                color: isSelected || hasFocus ? Colors.white : Colors.white60,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+              child: buildTabItem(index),
             ),
           );
         }),
@@ -253,7 +286,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   // ==========================================
   // TAB 1: CATEGORIES
   // ==========================================
-  Widget _buildCategoriesTab() {
+  Widget _buildCategoriesTab(bool isMobile) {
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -302,8 +335,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
               final isAll = selectedIds.contains('all');
 
               return GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: isMobile ? 2 : 3,
                   mainAxisExtent: 48,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
@@ -331,7 +364,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   // ==========================================
   // TAB 2: LANGUAGES
   // ==========================================
-  Widget _buildLanguagesTab() {
+  Widget _buildLanguagesTab(bool isMobile) {
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -380,8 +413,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
               final isAll = selectedIds.contains('all');
 
               return GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: isMobile ? 2 : 3,
                   mainAxisExtent: 48,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,

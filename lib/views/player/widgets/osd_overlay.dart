@@ -17,6 +17,7 @@ class OsdOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final channel = controller.currentChannel;
+    final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Stack(
       fit: StackFit.expand,
@@ -268,62 +269,101 @@ class OsdOverlay extends StatelessWidget {
                           SizedBox(
                             height: 40,
                             width: double.infinity,
-                            child: Stack(
-                              clipBehavior: Clip.hardEdge,
-                              alignment: Alignment.center,
-                              children: [
-                                // CENTER: Chevron Up (Pinned in exact dead center at 50%)
-                                Align(
-                                  alignment: Alignment.center,
-                                  child: _PillButton(
-                                    onTap: controller.toggleBottomChannelTray,
-                                    tooltip: 'Channels',
-                                    child: const Icon(
-                                      Icons.keyboard_arrow_up_rounded,
-                                      color: Colors.white,
-                                      size: 26,
-                                    ),
-                                  ),
-                                ),
-
-                                // LEFT: Play/Pause, Volume, LIVE (Anchored Left)
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment: CrossAxisAlignment.center,
+                            child: isMobile
+                                ? Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
-                                      // Pill 1: Play/Pause (40x40 Circle, Fill Rounded)
-                                      Obx(() => _PillButton(
-                                            onTap: controller.togglePlayPause,
-                                            tooltip: controller.isPlaying.value ? 'Pause (k)' : 'Play (k)',
-                                            child: Icon(
-                                              controller.isPlaying.value
-                                                  ? Icons.pause_rounded
-                                                  : Icons.play_arrow_rounded,
-                                              color: Colors.white,
-                                              size: 24,
-                                            ),
-                                          )),
-                                      const SizedBox(width: 8),
+                                      // Left: Play/Pause and LIVE pill
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Obx(() => _PillButton(
+                                                onTap: controller.togglePlayPause,
+                                                tooltip: controller.isPlaying.value ? 'Pause' : 'Play',
+                                                child: Icon(
+                                                  controller.isPlaying.value
+                                                      ? Icons.pause_rounded
+                                                      : Icons.play_arrow_rounded,
+                                                  color: Colors.white,
+                                                  size: 24,
+                                                ),
+                                              )),
+                                          const SizedBox(width: 8),
+                                          _LiveTimePill(controller: controller),
+                                        ],
+                                      ),
 
-                                      // Pill 2: Volume (40px Height, 40px Width Collapsed, Center Slider)
-                                      _VolumePill(controller: controller),
-                                      const SizedBox(width: 8),
+                                      // Center: Chevron Up (Opens Channel Tray)
+                                      _PillButton(
+                                        onTap: controller.toggleBottomChannelTray,
+                                        tooltip: 'Channels',
+                                        child: const Icon(
+                                          Icons.keyboard_arrow_up_rounded,
+                                          color: Colors.white,
+                                          size: 26,
+                                        ),
+                                      ),
 
-                                      // Pill 3: Time / LIVE Capsule Pill (Uniform 40px Height)
-                                      _LiveTimePill(controller: controller),
+                                      // Right: Settings & Fullscreen
+                                      _RightCapsule(controller: controller),
+                                    ],
+                                  )
+                                : Stack(
+                                    clipBehavior: Clip.hardEdge,
+                                    alignment: Alignment.center,
+                                    children: [
+                                      // CENTER: Chevron Up (Pinned in exact dead center at 50%)
+                                      Align(
+                                        alignment: Alignment.center,
+                                        child: _PillButton(
+                                          onTap: controller.toggleBottomChannelTray,
+                                          tooltip: 'Channels',
+                                          child: const Icon(
+                                            Icons.keyboard_arrow_up_rounded,
+                                            color: Colors.white,
+                                            size: 26,
+                                          ),
+                                        ),
+                                      ),
+
+                                      // LEFT: Play/Pause, Volume, LIVE (Anchored Left)
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          children: [
+                                            // Pill 1: Play/Pause (40x40 Circle, Fill Rounded)
+                                            Obx(() => _PillButton(
+                                                  onTap: controller.togglePlayPause,
+                                                  tooltip: controller.isPlaying.value ? 'Pause (k)' : 'Play (k)',
+                                                  child: Icon(
+                                                    controller.isPlaying.value
+                                                        ? Icons.pause_rounded
+                                                        : Icons.play_arrow_rounded,
+                                                    color: Colors.white,
+                                                    size: 24,
+                                                  ),
+                                                )),
+                                            const SizedBox(width: 8),
+
+                                            // Pill 2: Volume (40px Height, 40px Width Collapsed, Center Slider)
+                                            _VolumePill(controller: controller),
+                                            const SizedBox(width: 8),
+
+                                            // Pill 3: Time / LIVE Capsule Pill (Uniform 40px Height)
+                                            _LiveTimePill(controller: controller),
+                                          ],
+                                        ),
+                                      ),
+
+                                      // RIGHT: Settings, PiP, Fullscreen (Anchored Right)
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: _RightCapsule(controller: controller),
+                                      ),
                                     ],
                                   ),
-                                ),
-
-                                // RIGHT: Settings, PiP, Fullscreen (Anchored Right)
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: _RightCapsule(controller: controller),
-                                ),
-                              ],
-                            ),
                           ),
                         ],
                       ),
@@ -568,6 +608,8 @@ class _RightCapsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.of(context).size.width < 500;
+
     return Container(
       height: 40,
       padding: const EdgeInsets.all(4),
@@ -590,13 +632,15 @@ class _RightCapsule extends StatelessWidget {
             tooltip: 'Settings / Quality',
             isActive: controller.showQualityMenu.value,
           )),
-          const SizedBox(width: 4),
-          _CapsuleIconBtn(
-            icon: Icons.picture_in_picture_alt_rounded,
-            size: 19,
-            onTap: controller.minimizePlayer,
-            tooltip: 'Miniplayer (Minimize)',
-          ),
+          if (!isCompact) ...[
+            const SizedBox(width: 4),
+            _CapsuleIconBtn(
+              icon: Icons.picture_in_picture_alt_rounded,
+              size: 19,
+              onTap: controller.minimizePlayer,
+              tooltip: 'Miniplayer (Minimize)',
+            ),
+          ],
           const SizedBox(width: 4),
           Obx(() => _CapsuleIconBtn(
             icon: controller.isFullscreen.value

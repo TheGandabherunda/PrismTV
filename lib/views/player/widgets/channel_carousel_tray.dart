@@ -141,6 +141,14 @@ class _ChannelCarouselTrayState extends State<ChannelCarouselTray> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    final shelfHeight = isMobile ? 250.0 : 330.0;
+    final cardWidth = isMobile ? 145.0 : 195.0;
+    final fadeWidth = isMobile ? 28.0 : 56.0;
+    final listPadding = isMobile
+        ? const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
+        : const EdgeInsets.symmetric(horizontal: 28, vertical: 12);
+
     return ClipRect(
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
@@ -159,7 +167,7 @@ class _ChannelCarouselTrayState extends State<ChannelCarouselTray> {
               stops: [0.0, 0.16, 0.42, 0.72, 1.0],
             ),
           ),
-          padding: const EdgeInsets.only(top: 8, bottom: 20),
+          padding: EdgeInsets.only(top: isMobile ? 4 : 8, bottom: isMobile ? 12 : 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -230,14 +238,14 @@ class _ChannelCarouselTrayState extends State<ChannelCarouselTray> {
               // 2. Centered & Properly Rounded Category Chips Row (Capsule Pill Shaped)
               if (_categoryTitles.length > 1)
                 Container(
-                  height: 44,
+                  height: isMobile ? 38 : 44,
                   margin: const EdgeInsets.only(top: 2, bottom: 10),
                   child: Center(
                     child: SingleChildScrollView(
                       controller: _categoryScrollController,
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 28),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
@@ -317,7 +325,7 @@ class _ChannelCarouselTrayState extends State<ChannelCarouselTray> {
 
               // 3. Horizontal Channels Carousel (Cinejoy Card Design, Full D-pad Focus)
               SizedBox(
-                height: 330,
+                height: shelfHeight,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -326,9 +334,9 @@ class _ChannelCarouselTrayState extends State<ChannelCarouselTray> {
                       scrollDirection: Axis.horizontal,
                       clipBehavior: Clip.none,
                       physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                      padding: listPadding,
                       itemCount: _currentChannels.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 16),
+                      separatorBuilder: (_, _) => SizedBox(width: isMobile ? 12 : 16),
                       itemBuilder: (context, index) {
                         final ch = _currentChannels[index];
                         final isActive = ch.channelId == widget.activeChannel.channelId;
@@ -337,7 +345,7 @@ class _ChannelCarouselTrayState extends State<ChannelCarouselTray> {
                           onFocusChange: (focused) {
                             if (focused && _scrollController.hasClients) {
                               // Ensure focused card scrolls comfortably into view
-                              final cardOffset = index * 216.0;
+                              final cardOffset = index * (cardWidth + (isMobile ? 12.0 : 16.0));
                               final visibleMin = _scrollController.offset;
                               final visibleMax = visibleMin + MediaQuery.of(context).size.width - 240;
                               if (cardOffset < visibleMin || cardOffset > visibleMax) {
@@ -350,7 +358,7 @@ class _ChannelCarouselTrayState extends State<ChannelCarouselTray> {
                             }
                           },
                           child: SizedBox(
-                            width: 195,
+                            width: cardWidth,
                             child: ChannelCard(
                               channel: ch,
                               isActive: isActive,
@@ -366,7 +374,7 @@ class _ChannelCarouselTrayState extends State<ChannelCarouselTray> {
                       left: 0,
                       top: 0,
                       bottom: 0,
-                      width: 56,
+                      width: fadeWidth,
                       child: IgnorePointer(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
@@ -390,7 +398,7 @@ class _ChannelCarouselTrayState extends State<ChannelCarouselTray> {
                       right: 0,
                       top: 0,
                       bottom: 0,
-                      width: 56,
+                      width: fadeWidth,
                       child: IgnorePointer(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
@@ -409,25 +417,27 @@ class _ChannelCarouselTrayState extends State<ChannelCarouselTray> {
                       ),
                     ),
 
-                    // Floating Left Scroll Button
-                    Positioned(
-                      left: 8,
-                      top: 130,
-                      child: _ScrollNavButton(
-                        icon: Icons.chevron_left_rounded,
-                        onTap: () => _scrollRelative(-480),
+                    // Floating Left Scroll Button (Desktop/TV)
+                    if (!isMobile)
+                      Positioned(
+                        left: 8,
+                        top: 130,
+                        child: _ScrollNavButton(
+                          icon: Icons.chevron_left_rounded,
+                          onTap: () => _scrollRelative(-480),
+                        ),
                       ),
-                    ),
 
-                    // Floating Right Scroll Button
-                    Positioned(
-                      right: 8,
-                      top: 130,
-                      child: _ScrollNavButton(
-                        icon: Icons.chevron_right_rounded,
-                        onTap: () => _scrollRelative(480),
+                    // Floating Right Scroll Button (Desktop/TV)
+                    if (!isMobile)
+                      Positioned(
+                        right: 8,
+                        top: 130,
+                        child: _ScrollNavButton(
+                          icon: Icons.chevron_right_rounded,
+                          onTap: () => _scrollRelative(480),
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),

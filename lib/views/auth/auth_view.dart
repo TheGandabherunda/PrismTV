@@ -95,35 +95,83 @@ class AuthView extends GetView<AuthController> {
             },
             child: SafeArea(
               child: Center(
-                child: SingleChildScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 820),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        // Left Panel: Brand & Info
-                        Expanded(
-                          flex: 5,
-                          child: _buildLeftBrandPanel(),
-                        ),
+                child: Builder(
+                  builder: (context) {
+                    final isMobile = MediaQuery.of(context).size.width < 768;
 
-                        const SizedBox(width: 44),
+                    return SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 16 : 40,
+                        vertical: isMobile ? 20 : 24,
+                      ),
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 820),
+                        child: isMobile
+                            ? Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  _buildMobileBrandHeader(),
+                                  const SizedBox(height: 24),
+                                  _buildRightFormCard(),
+                                ],
+                              )
+                            : Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  // Left Panel: Brand & Info
+                                  Expanded(
+                                    flex: 5,
+                                    child: _buildLeftBrandPanel(),
+                                  ),
 
-                        // Right Panel: Form Card with Compact Symmetric Number Pad
-                        Center(
-                          child: _buildRightFormCard(),
-                        ),
-                      ],
-                    ),
-                  ),
+                                  const SizedBox(width: 44),
+
+                                  // Right Panel: Form Card with Compact Symmetric Number Pad
+                                  Center(
+                                    child: _buildRightFormCard(),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMobileBrandHeader() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const PrismTriangleLogo(size: 44, hasGlow: true),
+        const SizedBox(height: 12),
+        const Text(
+          'PrismTV',
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -0.4,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Smart Live Broadcast Platform',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Colors.white.withValues(alpha: 0.65),
+          ),
+        ),
+      ],
     );
   }
 

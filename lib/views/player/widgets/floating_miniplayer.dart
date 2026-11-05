@@ -15,6 +15,7 @@ class FloatingMiniplayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pc = Get.find<PlayerController>();
+    final isMobile = MediaQuery.of(context).size.width < 768;
 
     return Obx(() {
       if (!pc.isMinimized.value ||
@@ -27,7 +28,10 @@ class FloatingMiniplayer extends StatelessWidget {
       return Align(
         alignment: Alignment.bottomRight,
         child: Padding(
-          padding: const EdgeInsets.only(bottom: 24, right: 24),
+          padding: EdgeInsets.only(
+            bottom: isMobile ? 16 : 24,
+            right: isMobile ? 16 : 24,
+          ),
           child: _MiniplayerCard(controller: pc),
         ),
       );
@@ -83,6 +87,10 @@ class _MiniplayerCardState extends State<_MiniplayerCard> {
   Widget build(BuildContext context) {
     final pc = widget.controller;
     final ch = pc.currentChannel;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+    final playerWidth = isMobile ? (screenWidth * 0.58).clamp(180.0, 240.0) : 320.0;
+    final playerHeight = isMobile ? (playerWidth * 9 / 16) : 180.0;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
@@ -90,8 +98,8 @@ class _MiniplayerCardState extends State<_MiniplayerCard> {
       child: GestureDetector(
         onTap: pc.expandPlayer,
         child: Container(
-          width: 320,
-          height: 180,
+          width: playerWidth,
+          height: playerHeight,
           decoration: BoxDecoration(
             color: const Color(0xFF161210),
             borderRadius: BorderRadius.circular(16),

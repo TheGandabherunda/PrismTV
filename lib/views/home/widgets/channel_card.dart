@@ -87,7 +87,11 @@ class _ChannelCardState extends State<ChannelCard> {
     // Subtle, clean Cinejoy matte card background with gentle glass depth
     const cardBg = Color(0xFF13141C);
 
-    return Focus(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 170;
+
+        return Focus(
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent) {
           if (event.logicalKey == LogicalKeyboardKey.enter ||
@@ -202,15 +206,17 @@ class _ChannelCardState extends State<ChannelCard> {
                     // 2. Channel Logo Centerpiece (in tall portrait frame)
                     Center(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 28, 20, 62),
+                        padding: isCompact
+                            ? const EdgeInsets.fromLTRB(14, 20, 14, 52)
+                            : const EdgeInsets.fromLTRB(20, 28, 20, 62),
                         child: widget.channel.logoUrl.isNotEmpty
                             ? CachedNetworkImage(
                                 imageUrl: widget.channel.fullLogoUrl,
                                 fit: BoxFit.contain,
                                 placeholder: (_, _) => Center(
                                   child: ShimmerBox(
-                                    width: 84,
-                                    height: 54,
+                                    width: isCompact ? 60 : 84,
+                                    height: isCompact ? 40 : 54,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
@@ -327,7 +333,9 @@ class _ChannelCardState extends State<ChannelCard> {
                         child: BackdropFilter(
                           filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
                           child: Container(
-                            padding: const EdgeInsets.fromLTRB(14, 20, 14, 14),
+                            padding: isCompact
+                                ? const EdgeInsets.fromLTRB(10, 14, 10, 10)
+                                : const EdgeInsets.fromLTRB(14, 20, 14, 14),
                             decoration: BoxDecoration(
                               gradient: const LinearGradient(
                                 begin: Alignment.bottomCenter,
@@ -356,7 +364,7 @@ class _ChannelCardState extends State<ChannelCard> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 13.5,
+                                    fontSize: isCompact ? 12.0 : 13.5,
                                     fontWeight: highlighted ? FontWeight.w700 : FontWeight.w600,
                                     color: highlighted ? Colors.white : const Color(0xFFF1F1F4),
                                     letterSpacing: 0.2,
@@ -366,7 +374,7 @@ class _ChannelCardState extends State<ChannelCard> {
                                 Text(
                                   widget.channel.languageName.toUpperCase(),
                                   style: TextStyle(
-                                    fontSize: 10,
+                                    fontSize: isCompact ? 9.0 : 10.0,
                                     fontWeight: FontWeight.w800,
                                     color: highlighted ? cardAccent : AppColors.textMuted,
                                     letterSpacing: 0.6,
@@ -385,6 +393,8 @@ class _ChannelCardState extends State<ChannelCard> {
           ),
         ),
       ),
+    );
+      },
     );
   }
 

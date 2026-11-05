@@ -37,7 +37,7 @@ class HomeView extends GetView<HomeController> {
 
           // 2. Main TV Live UI (No rail, full-screen width with top header, shelves & right event column)
           Positioned.fill(
-            child: _buildLiveTvView(),
+            child: _buildLiveTvView(context),
           ),
 
           // Floating Miniplayer (pinned to bottom-right)
@@ -47,39 +47,43 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildLiveTvView() {
+  Widget _buildLiveTvView(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 800;
+
     return Stack(
       children: [
         // 1. Main TV Content Area: Left Shelves + Right Event Info Column
         // The shelves list scrolls underneath the Apple-like progressive blur header!
         Positioned.fill(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Scrollable Shelves Layer
-              Expanded(
-                child: _buildShelvesList(),
-              ),
+          child: isMobile
+              ? _buildShelvesList(isMobile: true)
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Scrollable Shelves Layer
+                    Expanded(
+                      child: _buildShelvesList(isMobile: false),
+                    ),
 
-              // Right Side Column: Shows Hovered/Selected Channel & Current Event Info
-              Obx(() {
-                final channel = controller.focusedChannel.value;
-                final program = controller.currentProgram.value;
-                final isLoading = controller.isLoadingEpg.value;
-                final palette = controller.ambientPalette.value;
+                    // Right Side Column: Shows Hovered/Selected Channel & Current Event Info
+                    Obx(() {
+                      final channel = controller.focusedChannel.value;
+                      final program = controller.currentProgram.value;
+                      final isLoading = controller.isLoadingEpg.value;
+                      final palette = controller.ambientPalette.value;
 
-                return Padding(
-                  padding: const EdgeInsets.only(top: 130),
-                  child: _EpgDetailSideColumn(
-                    channel: channel,
-                    program: program,
-                    isLoading: isLoading,
-                    ambientPalette: palette,
-                  ),
-                );
-              }),
-            ],
-          ),
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 130),
+                        child: _EpgDetailSideColumn(
+                          channel: channel,
+                          program: program,
+                          isLoading: isLoading,
+                          ambientPalette: palette,
+                        ),
+                      );
+                    }),
+                  ],
+                ),
         ),
 
         // 2. Pure Optical Progressive Blur Header pinned at top (Zero Tint, Pure Optical Glass)
@@ -88,14 +92,136 @@ class HomeView extends GetView<HomeController> {
           left: 0,
           right: 0,
           child: _ApplePureProgressiveBlurHeader(
-            child: _buildTopHeader(),
+            height: isMobile ? 80.0 : 115.0,
+            child: _buildTopHeader(context),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildTopHeader() {
+  Widget _buildTopHeader(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 800;
+
+    if (isMobile) {
+      return Obx(() {
+        if (controller.isMobileSearchOpen.value) {
+          // Mobile Search Expanded Bar
+          return Container(
+            height: 64,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 22),
+                  onPressed: controller.closeMobileSearch,
+                  splashRadius: 20,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Container(
+                    height: 40,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0x38161824),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.22),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.search_rounded, size: 18, color: AppColors.primaryLight),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: controller.searchController,
+                            onChanged: controller.onSearchChanged,
+                            autofocus: true,
+                            style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                            cursorColor: AppColors.primaryLight,
+                            decoration: InputDecoration(
+                              hintText: 'Search channel, language...',
+                              hintStyle: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.40),
+                                fontSize: 13,
+                              ),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                          ),
+                        ),
+                        if (controller.searchQuery.value.isNotEmpty)
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
+                            onPressed: controller.clearSearch,
+                            splashRadius: 16,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _CinejoyFilterButton(controller: controller, isMobile: true),
+              ],
+            ),
+          );
+        }
+
+        // Mobile Standard Header
+        return Container(
+          height: 64,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              // Left: Logo & Brand
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  PrismTriangleLogo(size: 28, hasGlow: true),
+                  SizedBox(width: 8),
+                  Text(
+                    'PrismTV',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              // Right: Search Button, Filter Button, Settings, Profile
+              IconButton(
+                icon: const Icon(Icons.search_rounded, color: Colors.white, size: 21),
+                onPressed: controller.openMobileSearch,
+                splashRadius: 20,
+                tooltip: 'Search',
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
+              const SizedBox(width: 4),
+              _CinejoyFilterButton(controller: controller, isMobile: true),
+              const SizedBox(width: 4),
+              _HeaderSettingsButton(onTap: controller.openSettingsDialog),
+              const SizedBox(width: 4),
+              Obx(() => _HeaderAccountButton(
+                isAuthenticated: controller.isAuthenticated.value,
+                onTap: controller.onProfileTapped,
+              )),
+            ],
+          ),
+        );
+      });
+    }
+
+    // Desktop Header (100% UNCHANGED!)
     return Container(
       height: 76,
       padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -149,13 +275,16 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildShelvesList() {
+  Widget _buildShelvesList({bool isMobile = false}) {
     return Obx(() {
       if (controller.isLoadingChannels.value) {
         return Shimmer(
           child: ListView(
             physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(top: 136, bottom: 48),
+            padding: EdgeInsets.only(
+              top: isMobile ? 100 : 136,
+              bottom: isMobile ? 32 : 48,
+            ),
             children: const [
               SkeletonShelf(),
               SkeletonShelf(),
@@ -169,7 +298,7 @@ class HomeView extends GetView<HomeController> {
       if (sections.isEmpty) {
         return Center(
           child: Padding(
-            padding: const EdgeInsets.only(top: 140),
+            padding: EdgeInsets.only(top: isMobile ? 100 : 140),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -200,17 +329,21 @@ class HomeView extends GetView<HomeController> {
 
       return ListView.builder(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.only(top: 136, bottom: 48),
+        padding: EdgeInsets.only(
+          top: isMobile ? 100 : 136,
+          bottom: isMobile ? 32 : 48,
+        ),
         itemCount: sections.length + 1,
         itemBuilder: (context, index) {
           if (index == sections.length) {
-            return const _HomeScreenFooter();
+            return _HomeScreenFooter(isMobile: isMobile);
           }
           final entry = sections[index];
           return _CategoryShelf(
             category: entry.key,
             channels: entry.value,
             controller: controller,
+            isMobile: isMobile,
           );
         },
       );
@@ -221,7 +354,8 @@ class HomeView extends GetView<HomeController> {
 /// Extreme Bottom Home Screen Footer
 /// Shows PrismTV icon, brand title, version badge, thank you note, and official GitHub repository link.
 class _HomeScreenFooter extends StatefulWidget {
-  const _HomeScreenFooter();
+  final bool isMobile;
+  const _HomeScreenFooter({this.isMobile = false});
 
   @override
   State<_HomeScreenFooter> createState() => _HomeScreenFooterState();
@@ -241,8 +375,14 @@ class _HomeScreenFooterState extends State<_HomeScreenFooter> {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
-      margin: const EdgeInsets.only(top: 20, bottom: 36),
+      padding: EdgeInsets.symmetric(
+        horizontal: widget.isMobile ? 16 : 28,
+        vertical: widget.isMobile ? 24 : 40,
+      ),
+      margin: EdgeInsets.only(
+        top: widget.isMobile ? 10 : 20,
+        bottom: widget.isMobile ? 20 : 36,
+      ),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -402,14 +542,19 @@ class _HomeScreenFooterState extends State<_HomeScreenFooter> {
 /// ZERO COLOR, ZERO TINT, PURE OPTICAL DIFFUSION.
 class _ApplePureProgressiveBlurHeader extends StatelessWidget {
   final Widget child;
-  static const double headerHeight = 115.0;
+  final double height;
 
-  const _ApplePureProgressiveBlurHeader({required this.child});
+  const _ApplePureProgressiveBlurHeader({
+    required this.child,
+    this.height = 115.0,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final scale = height / 115.0;
+
     return SizedBox(
-      height: headerHeight,
+      height: height,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -417,20 +562,20 @@ class _ApplePureProgressiveBlurHeader extends StatelessWidget {
           IgnorePointer(
             child: Stack(
               fit: StackFit.expand,
-              children: const [
-                _OpticalBlurSlice(height: 115, sigma: 0.08),
-                _OpticalBlurSlice(height: 105, sigma: 0.35),
-                _OpticalBlurSlice(height: 95, sigma: 0.85),
-                _OpticalBlurSlice(height: 85, sigma: 1.60),
-                _OpticalBlurSlice(height: 75, sigma: 2.60),
-                _OpticalBlurSlice(height: 68, sigma: 3.80),
-                _OpticalBlurSlice(height: 60, sigma: 5.20),
-                _OpticalBlurSlice(height: 52, sigma: 6.80),
-                _OpticalBlurSlice(height: 44, sigma: 8.20),
-                _OpticalBlurSlice(height: 36, sigma: 9.50),
-                _OpticalBlurSlice(height: 28, sigma: 10.50),
-                _OpticalBlurSlice(height: 20, sigma: 11.00),
-                _OpticalBlurSlice(height: 12, sigma: 11.00),
+              children: [
+                _OpticalBlurSlice(height: 115 * scale, sigma: 0.08),
+                _OpticalBlurSlice(height: 105 * scale, sigma: 0.35),
+                _OpticalBlurSlice(height: 95 * scale, sigma: 0.85),
+                _OpticalBlurSlice(height: 85 * scale, sigma: 1.60),
+                _OpticalBlurSlice(height: 75 * scale, sigma: 2.60),
+                _OpticalBlurSlice(height: 68 * scale, sigma: 3.80),
+                _OpticalBlurSlice(height: 60 * scale, sigma: 5.20),
+                _OpticalBlurSlice(height: 52 * scale, sigma: 6.80),
+                _OpticalBlurSlice(height: 44 * scale, sigma: 8.20),
+                _OpticalBlurSlice(height: 36 * scale, sigma: 9.50),
+                _OpticalBlurSlice(height: 28 * scale, sigma: 10.50),
+                _OpticalBlurSlice(height: 20 * scale, sigma: 11.00),
+                _OpticalBlurSlice(height: 12 * scale, sigma: 11.00),
               ],
             ),
           ),
@@ -817,8 +962,12 @@ enum _FilterSubMenu { none, category, language }
 /// Cinejoy Unified Filter Button with Cascading Side Dropdown
 class _CinejoyFilterButton extends StatefulWidget {
   final HomeController controller;
+  final bool isMobile;
 
-  const _CinejoyFilterButton({required this.controller});
+  const _CinejoyFilterButton({
+    required this.controller,
+    this.isMobile = false,
+  });
 
   @override
   State<_CinejoyFilterButton> createState() => _CinejoyFilterButtonState();
@@ -831,7 +980,20 @@ class _CinejoyFilterButtonState extends State<_CinejoyFilterButton> {
   bool _isHovered = false;
   _FilterSubMenu _activeSubMenu = _FilterSubMenu.category;
 
+  void _openMobileFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _MobileFilterSheet(controller: widget.controller),
+    );
+  }
+
   void _toggle() {
+    if (widget.isMobile) {
+      _openMobileFilterSheet();
+      return;
+    }
     if (_isOpen) {
       _close();
     } else {
@@ -1194,6 +1356,38 @@ class _CinejoyFilterButtonState extends State<_CinejoyFilterButton> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isMobile) {
+      return Obx(() {
+        final hasActive = widget.controller.hasActiveFilters;
+
+        return IconButton(
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(Icons.tune_rounded, color: Colors.white, size: 21),
+              if (hasActive)
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          onPressed: _openMobileFilterSheet,
+          splashRadius: 20,
+          tooltip: 'Filters',
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        );
+      });
+    }
+
     return CompositedTransformTarget(
       link: _layerLink,
       child: Obx(() {
@@ -1430,16 +1624,277 @@ class _FilterSubMenuTileState extends State<_FilterSubMenuTile> {
   }
 }
 
+/// Sleek Mobile Filter Bottom Sheet with Categories and Languages
+class _MobileFilterSheet extends StatefulWidget {
+  final HomeController controller;
+  const _MobileFilterSheet({required this.controller});
+
+  @override
+  State<_MobileFilterSheet> createState() => _MobileFilterSheetState();
+}
+
+class _MobileFilterSheetState extends State<_MobileFilterSheet> {
+  int _activeTab = 0; // 0 = Categories, 1 = Languages
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          height: MediaQuery.of(context).size.height * 0.75,
+          decoration: BoxDecoration(
+            color: const Color(0xF210121C),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.14),
+              width: 1.0,
+            ),
+          ),
+          child: Column(
+            children: [
+              // 1. Drag Handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(top: 10, bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+
+              // 2. Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Row(
+                  children: [
+                    const Text(
+                      'Filter Channels',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () {
+                        widget.controller.resetAllFilters();
+                        setState(() {});
+                      },
+                      child: const Text(
+                        'Reset All',
+                        style: TextStyle(
+                          color: AppColors.primaryLight,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 20),
+                      onPressed: () => Navigator.of(context).pop(),
+                      splashRadius: 18,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 3. Segmented Switcher (Categories / Languages)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _activeTab = 0),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _activeTab == 0 ? AppColors.primary : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'Categories',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _activeTab = 1),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _activeTab == 1 ? AppColors.primary : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'Languages',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const Divider(color: Color(0x1FFFFFFF), height: 1),
+
+              // 4. Options List
+              Expanded(
+                child: Obx(() {
+                  if (_activeTab == 0) {
+                    final selectedIds = widget.controller.selectedCategoryIds;
+                    final isAll = selectedIds.contains('all');
+
+                    return ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: widget.controller.categories.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, idx) {
+                        final cat = widget.controller.categories[idx];
+                        final isSelected = isAll ? (cat.id == 'all') : selectedIds.contains(cat.id);
+
+                        return InkWell(
+                          onTap: () {
+                            widget.controller.toggleCategory(cat.id);
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.primary.withValues(alpha: 0.20) : Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected ? AppColors.primaryLight : Colors.white.withValues(alpha: 0.10),
+                                width: isSelected ? 1.4 : 1.0,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(cat.icon, size: 20, color: isSelected ? AppColors.primaryLight : Colors.white70),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    cat.title,
+                                    style: TextStyle(
+                                      color: isSelected ? Colors.white : Colors.white70,
+                                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                                if (isSelected)
+                                  const Icon(Icons.check_rounded, color: AppColors.primaryLight, size: 18),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }
+
+                  // Languages Tab
+                  final selectedIds = widget.controller.selectedLanguageIds;
+                  final isAll = selectedIds.contains('all');
+
+                  return ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: widget.controller.languages.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, idx) {
+                      final lang = widget.controller.languages[idx];
+                      final isSelected = isAll ? (lang.id == 'all') : selectedIds.contains(lang.id);
+
+                      return InkWell(
+                        onTap: () {
+                          widget.controller.toggleLanguage(lang.id);
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: isSelected ? AppColors.primary.withValues(alpha: 0.20) : Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected ? AppColors.primaryLight : Colors.white.withValues(alpha: 0.10),
+                              width: isSelected ? 1.4 : 1.0,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.language_rounded, size: 20, color: Colors.white70),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  lang.title,
+                                  style: TextStyle(
+                                    color: isSelected ? Colors.white : Colors.white70,
+                                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(Icons.check_rounded, color: AppColors.primaryLight, size: 18),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                }),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Horizontal Shelf with Cinejoy Section Divide & True Photographic Side Fade
 class _CategoryShelf extends StatefulWidget {
   final CategoryModel category;
   final List<ChannelModel> channels;
   final HomeController controller;
+  final bool isMobile;
 
   const _CategoryShelf({
     required this.category,
     required this.channels,
     required this.controller,
+    this.isMobile = false,
   });
 
   @override
@@ -1501,21 +1956,23 @@ class _CategoryShelfState extends State<_CategoryShelf> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 42),
+      padding: EdgeInsets.only(bottom: widget.isMobile ? 24 : 42),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           // Section Divide Header (Pure Typography, NO Icon Box, NO View All)
           Padding(
-            padding: const EdgeInsets.fromLTRB(28, 6, 28, 12),
+            padding: widget.isMobile
+                ? const EdgeInsets.fromLTRB(16, 4, 16, 8)
+                : const EdgeInsets.fromLTRB(28, 6, 28, 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
                   widget.category.title,
-                  style: const TextStyle(
-                    fontSize: 19,
+                  style: TextStyle(
+                    fontSize: widget.isMobile ? 16 : 19,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.3,
                     color: Colors.white,
@@ -1525,27 +1982,29 @@ class _CategoryShelfState extends State<_CategoryShelf> {
                 Text(
                   '• ${widget.channels.length} channels',
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: widget.isMobile ? 12 : 13,
                     fontWeight: FontWeight.w500,
                     color: Colors.white.withValues(alpha: 0.45),
                   ),
                 ),
                 const Spacer(),
 
-                // Left & Right Carousel Navigation Arrows
-                if (_canScrollLeft)
-                  _ShelfArrowButton(
-                    icon: Icons.chevron_left_rounded,
-                    onTap: () => _scroll(-450),
-                    tooltip: 'Scroll left',
-                  ),
-                if (_canScrollRight) ...[
-                  const SizedBox(width: 6),
-                  _ShelfArrowButton(
-                    icon: Icons.chevron_right_rounded,
-                    onTap: () => _scroll(450),
-                    tooltip: 'Scroll right',
-                  ),
+                // Left & Right Carousel Navigation Arrows (Desktop/TV)
+                if (!widget.isMobile) ...[
+                  if (_canScrollLeft)
+                    _ShelfArrowButton(
+                      icon: Icons.chevron_left_rounded,
+                      onTap: () => _scroll(-450),
+                      tooltip: 'Scroll left',
+                    ),
+                  if (_canScrollRight) ...[
+                    const SizedBox(width: 6),
+                    _ShelfArrowButton(
+                      icon: Icons.chevron_right_rounded,
+                      onTap: () => _scroll(450),
+                      tooltip: 'Scroll right',
+                    ),
+                  ],
                 ],
               ],
             ),
@@ -1553,7 +2012,7 @@ class _CategoryShelfState extends State<_CategoryShelf> {
 
           // Horizontal Channels Carousel with Cinejoy Poster Scale & Ambient Side Fades
           SizedBox(
-            height: 350,
+            height: widget.isMobile ? 260 : 350,
             child: Stack(
               clipBehavior: Clip.none,
               children: [
@@ -1579,13 +2038,15 @@ class _CategoryShelfState extends State<_CategoryShelf> {
                       scrollDirection: Axis.horizontal,
                       clipBehavior: Clip.none,
                       physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+                      padding: widget.isMobile
+                          ? const EdgeInsets.symmetric(horizontal: 16, vertical: 12)
+                          : const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
                       itemCount: widget.channels.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 16),
+                      separatorBuilder: (_, _) => SizedBox(width: widget.isMobile ? 12 : 16),
                       itemBuilder: (context, idx) {
                         final channel = widget.channels[idx];
                         return SizedBox(
-                          width: 200,
+                          width: widget.isMobile ? 145 : 200,
                           child: ChannelCard(
                             channel: channel,
                             onTap: () => widget.controller.playChannel(channel),
@@ -1616,7 +2077,7 @@ class _CategoryShelfState extends State<_CategoryShelf> {
                   left: 0,
                   top: 0,
                   bottom: 0,
-                  width: 80,
+                  width: widget.isMobile ? 24 : 80,
                   child: IgnorePointer(
                     child: AnimatedOpacity(
                       opacity: _canScrollLeft ? 1.0 : 0.0,
@@ -1652,7 +2113,7 @@ class _CategoryShelfState extends State<_CategoryShelf> {
                   right: 0,
                   top: 0,
                   bottom: 0,
-                  width: 80,
+                  width: widget.isMobile ? 24 : 80,
                   child: IgnorePointer(
                     child: AnimatedOpacity(
                       opacity: _canScrollRight ? 1.0 : 0.0,
