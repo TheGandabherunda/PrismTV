@@ -23,15 +23,22 @@
   </script>
   <script>
     (function() {
-      // Dynamically resolve base href so it works at root (/), subpath (/prismTV/), and local file (webOS file://)
+      // Dynamically resolve base href preserving exact directory casing (e.g. /PrismTV/ vs /prismTV/ vs /)
       var path = window.location.pathname;
       var base = document.querySelector('base');
       if (window.location.protocol === 'file:' || window.location.origin === 'null') {
         if (base) base.setAttribute('href', './');
-      } else if (path.toLowerCase().indexOf('/prismtv') === 0) {
-        if (base) base.setAttribute('href', '/prismTV/');
-      } else if (base && base.getAttribute('href') === '$FLUTTER_BASE_HREF') {
-        base.setAttribute('href', '/');
+        window.prismAppBasePrefix = '';
+      } else {
+        if (!path.endsWith('/') && path.indexOf('.') === -1) {
+          path = path + '/';
+        }
+        var lastSlash = path.lastIndexOf('/');
+        var dir = lastSlash >= 0 ? path.substring(0, lastSlash + 1) : '/';
+        if (base && dir) {
+          base.setAttribute('href', dir);
+        }
+        window.prismAppBasePrefix = (dir && dir !== '/' && dir.endsWith('/')) ? dir.slice(0, -1) : '';
       }
     })();
 
@@ -189,7 +196,7 @@
               var drmKey = u.searchParams.get('drm_key') || '';
               langPref = u.searchParams.get('lang') || '';
               hlsFallback = u.searchParams.get('hls_fallback') || '';
-              var prefix = window.location.pathname.toLowerCase().indexOf('/prismtv') === 0 ? '/prismTV' : '';
+              var prefix = (window.prismAppBasePrefix !== undefined) ? window.prismAppBasePrefix : (window.location.pathname.startsWith('/PrismTV') ? '/PrismTV' : (window.location.pathname.startsWith('/prismTV') ? '/prismTV' : ''));
               var effectiveHost = (u && u.protocol.startsWith('http') && u.origin && u.origin !== 'null' && (window.location.protocol === 'file:' || window.location.origin === 'null')) ? u.origin : prefix;
               if (drmKey) {
                 drmConfig = {
@@ -206,7 +213,7 @@
               }
             } catch (_) {}
 
-            var prefix = window.location.pathname.toLowerCase().indexOf('/prismtv') === 0 ? '/prismTV' : '';
+            var prefix = (window.prismAppBasePrefix !== undefined) ? window.prismAppBasePrefix : (window.location.pathname.startsWith('/PrismTV') ? '/PrismTV' : (window.location.pathname.startsWith('/prismTV') ? '/prismTV' : ''));
             var effectiveHost = (u && u.protocol.startsWith('http') && u.origin && u.origin !== 'null' && (window.location.protocol === 'file:' || window.location.origin === 'null')) ? u.origin : prefix;
             var shakaConfig = {
               drm: drmConfig,
