@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'core/constants/app_colors.dart';
+import 'core/services/app_update_service.dart';
 import 'core/storage/hive_service.dart';
 import 'data/providers/jio_live_source.dart';
 import 'data/repositories/auth_repository.dart';
@@ -30,6 +31,7 @@ void main() async {
   Get.put<AuthRepository>(AuthRepository(jioSource), permanent: true);
   Get.put<ChannelRepository>(ChannelRepository(jioSource), permanent: true);
   Get.put<PlayerController>(PlayerController(), permanent: true);
+  Get.put<AppUpdateService>(AppUpdateService(), permanent: true);
 
   runApp(const PrismTvApp());
 }

@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/ambient_color_service.dart';
+import '../../core/services/app_update_service.dart';
 import '../../core/widgets/prism_triangle_logo.dart';
 import '../../core/widgets/shimmer_loading.dart';
 import '../../data/models/category_model.dart';
@@ -39,6 +40,9 @@ class HomeView extends GetView<HomeController> {
           Positioned.fill(
             child: _buildLiveTvView(context),
           ),
+
+          // Floating In-App Update Notification Pill
+          const _HomeUpdateFloatingPill(),
 
           // Floating Miniplayer (pinned to bottom-right)
           const FloatingMiniplayer(),
@@ -2701,3 +2705,106 @@ class _AmbientAtmosphereMeshState extends State<_AmbientAtmosphereMesh>
     );
   }
 }
+
+/// Floating In-App Update Notification Pill for Home View
+class _HomeUpdateFloatingPill extends StatelessWidget {
+  const _HomeUpdateFloatingPill();
+
+  @override
+  Widget build(BuildContext context) {
+    final updateService = Get.find<AppUpdateService>();
+    final isMobile = MediaQuery.of(context).size.width < 800;
+
+    return Obx(() {
+      if (!updateService.updateAvailable.value) {
+        return const SizedBox.shrink();
+      }
+
+      return Positioned(
+        top: isMobile ? 74 : 96,
+        left: 20,
+        right: 20,
+        child: Center(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xE8141020),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: AppColors.primaryLight.withValues(alpha: 0.65),
+                    width: 1.2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryGlow.withValues(alpha: 0.35),
+                      blurRadius: 18,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.primaryLight,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'PrismTV v${updateService.latestVersion.value} Available',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    InkWell(
+                      onTap: () {
+                        final hc = Get.find<HomeController>();
+                        hc.openSettingsDialog();
+                      },
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Text(
+                          'Update',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
+                      onPressed: () => updateService.updateAvailable.value = false,
+                      splashRadius: 14,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+}
+

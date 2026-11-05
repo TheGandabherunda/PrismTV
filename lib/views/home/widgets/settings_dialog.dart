@@ -2,7 +2,9 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/app_update_service.dart';
 import '../../../core/storage/hive_service.dart';
 import '../../../data/models/quality_option.dart';
 import '../home_controller.dart';
@@ -85,6 +87,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                       _buildResolutionTab(),
                       _buildStreamServerTab(),
                       _buildRemoteGuideTab(),
+                      _buildUpdatesTab(isMobile),
                     ],
                   ),
                 ),
@@ -168,6 +171,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       {'title': 'Resolution', 'icon': Icons.hd_rounded},
       {'title': 'Stream Server', 'icon': Icons.dns_rounded},
       {'title': 'Remote & Keys', 'icon': Icons.settings_remote_rounded},
+      {'title': 'Updates', 'icon': Icons.system_update_rounded},
     ];
 
     Widget buildTabItem(int index) {
@@ -833,6 +837,342 @@ class _SettingsDialogState extends State<SettingsDialog> {
           const SizedBox(height: 16),
         ],
       ),
+    );
+  }
+
+  // ==========================================
+  // TAB 6: SOFTWARE UPDATES & GITHUB RELEASES
+  // ==========================================
+  Widget _buildUpdatesTab(bool isMobile) {
+    final updateService = Get.find<AppUpdateService>();
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 16 : 24,
+        vertical: isMobile ? 16 : 20,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. Status Banner Card
+          Obx(() {
+            final hasUpdate = updateService.updateAvailable.value;
+            final isChecking = updateService.isChecking.value;
+            final isDownloading = updateService.isDownloading.value;
+            final progress = updateService.downloadProgress.value;
+            final latest = updateService.latestVersion.value;
+
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: hasUpdate ? const Color(0x28A839C7) : const Color(0x1A22C55E),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: hasUpdate
+                      ? AppColors.primaryLight.withValues(alpha: 0.45)
+                      : const Color(0x4D22C55E),
+                  width: 1.2,
+                ),
+                boxShadow: hasUpdate
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primaryGlow.withValues(alpha: 0.25),
+                          blurRadius: 18,
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: hasUpdate ? AppColors.primary : const Color(0xFF16A34A),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            hasUpdate ? Icons.system_update_rounded : Icons.check_circle_rounded,
+                            color: Colors.white,
+                            size: 26,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              hasUpdate
+                                  ? 'New Update Available: v$latest'
+                                  : 'PrismTV is Up to Date',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              hasUpdate
+                                  ? 'An in-place direct OTA update is ready to install without losing your settings.'
+                                  : 'Current Version: v${AppUpdateService.currentVersion} • Connected to GitHub',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Download Progress Bar
+                  if (isDownloading) ...[
+                    const SizedBox(height: 18),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: progress > 0.0 ? progress : null,
+                        minHeight: 8,
+                        backgroundColor: Colors.white.withValues(alpha: 0.12),
+                        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryLight),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          updateService.downloadStatus.value,
+                          style: const TextStyle(fontSize: 11.5, color: Colors.white70),
+                        ),
+                        Text(
+                          '${(progress * 100).toInt()}%',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primaryLight,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+
+                  const SizedBox(height: 18),
+
+                  // Action Buttons Row
+                  Row(
+                    children: [
+                      if (hasUpdate && !isDownloading)
+                        Focus(
+                          child: Builder(
+                            builder: (ctx) {
+                              final hasFocus = Focus.of(ctx).hasFocus;
+                              return ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  side: hasFocus ? const BorderSide(color: Colors.white, width: 1.5) : null,
+                                ),
+                                onPressed: updateService.downloadAndInstall,
+                                icon: const Icon(Icons.download_rounded, size: 18, color: Colors.white),
+                                label: const Text(
+                                  'Download & Install Update',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+
+                      if (!hasUpdate || isDownloading)
+                        Focus(
+                          child: Builder(
+                            builder: (ctx) {
+                              final hasFocus = Focus.of(ctx).hasFocus;
+                              return OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                  side: BorderSide(color: hasFocus ? Colors.white : Colors.white.withValues(alpha: 0.20)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  backgroundColor: hasFocus ? Colors.white.withValues(alpha: 0.10) : null,
+                                ),
+                                onPressed: isChecking ? null : () => updateService.checkForUpdates(isManual: true),
+                                icon: isChecking
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+                                      )
+                                    : const Icon(Icons.refresh_rounded, size: 16, color: Colors.white70),
+                                label: Text(
+                                  isChecking ? 'Checking GitHub...' : 'Check for Updates',
+                                  style: const TextStyle(color: Colors.white, fontSize: 12.5),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+
+                      const Spacer(),
+
+                      // GitHub Release Link
+                      Focus(
+                        child: Builder(
+                          builder: (ctx) {
+                            final hasFocus = Focus.of(ctx).hasFocus;
+                            return TextButton.icon(
+                              style: TextButton.styleFrom(
+                                backgroundColor: hasFocus ? Colors.white.withValues(alpha: 0.10) : null,
+                              ),
+                              onPressed: () async {
+                                final uri = Uri.parse('https://github.com/TheGandabherunda/PrismTV/releases');
+                                if (await canLaunchUrl(uri)) {
+                                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                                }
+                              },
+                              icon: const Icon(Icons.open_in_new_rounded, size: 14, color: AppColors.primaryLight),
+                              label: const Text(
+                                'View on GitHub',
+                                style: TextStyle(color: AppColors.primaryLight, fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
+
+          const SizedBox(height: 24),
+
+          // 2. Release Notes / Changelog
+          const _GuideSectionHeader(
+            title: 'Changelog & What\'s New',
+            icon: Icons.article_rounded,
+          ),
+          const SizedBox(height: 10),
+
+          Obx(() {
+            final notes = updateService.releaseNotes.value;
+            final isChecking = updateService.isChecking.value;
+
+            if (isChecking) {
+              return Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: const Row(
+                  children: [
+                    SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70)),
+                    SizedBox(width: 12),
+                    Text('Fetching latest release notes from GitHub...', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  ],
+                ),
+              );
+            }
+
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: Text(
+                notes.isNotEmpty
+                    ? notes
+                    : 'PrismTV v1.0.0 initial release featuring pure progressive optical blur header, universal 1080p Full HD DASH live streams, TV remote & keyboard navigation, and responsive touch UI.',
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12.5,
+                  height: 1.5,
+                ),
+              ),
+            );
+          }),
+
+          const SizedBox(height: 24),
+
+          // 3. Seamless OTA Update Guide
+          const _GuideSectionHeader(
+            title: 'In-Place Direct OTA Upgrade Info',
+            icon: Icons.info_outline_rounded,
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0x18161824),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _UpdateInfoPoint(
+                  icon: Icons.security_rounded,
+                  text: 'No Data Loss: Login session, favorites, and proxy configurations are completely preserved during updates.',
+                ),
+                SizedBox(height: 8),
+                _UpdateInfoPoint(
+                  icon: Icons.tv_rounded,
+                  text: 'Smart TV & Android Friendly: Remote D-Pad clickable; prompts Android OS native installer directly.',
+                ),
+                SizedBox(height: 8),
+                _UpdateInfoPoint(
+                  icon: Icons.cloud_download_rounded,
+                  text: 'Direct from GitHub: Downloads verified official release artifacts from TheGandabherunda/PrismTV.',
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UpdateInfoPoint extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _UpdateInfoPoint({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: AppColors.primaryLight),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.white70,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
