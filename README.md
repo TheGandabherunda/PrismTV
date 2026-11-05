@@ -1,4 +1,4 @@
-# PrismTV (ದರ್ಶನ · Prism)
+# PrismTV
 
 <div align="center">
 
