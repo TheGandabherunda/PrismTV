@@ -6,8 +6,12 @@ class ApiEndpoints {
   static String get webSubpathPrefix {
     if (!kIsWeb) return '';
     try {
-      final path = Uri.base.path.toLowerCase();
-      if (path.contains('/prismtv')) return '/prismTV';
+      final path = Uri.base.path;
+      final lower = path.toLowerCase();
+      final idx = lower.indexOf('/prismtv');
+      if (idx != -1) {
+        return path.substring(idx, idx + '/prismtv'.length);
+      }
     } catch (_) {}
     return '';
   }
