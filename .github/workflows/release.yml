@@ -159,8 +159,8 @@ jobs:
       - name: Install Flutter Dependencies
         run: flutter pub get
 
-      - name: Build macOS Release App (No Code Sign for CI)
-        run: flutter build macos --release --no-codesign
+      - name: Build macOS Release App
+        run: flutter build macos --release
 
       - name: Package macOS App Bundle
         run: |
