@@ -160,7 +160,7 @@ jobs:
         run: flutter pub get
 
       - name: Build macOS Release App
-        run: flutter build macos --release --no-codesign
+        run: flutter build macos --release
 
       - name: Package macOS App Bundle
         run: |
