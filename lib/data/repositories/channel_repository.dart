@@ -12,6 +12,10 @@ class ChannelRepository {
     return _liveSource.fetchChannels();
   }
 
+  void clearCache() {
+    _liveSource.clearCache();
+  }
+
   Future<List<EpgProgramModel>> getEpg(int channelId) async {
     return _liveSource.fetchEpg(channelId);
   }

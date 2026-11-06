@@ -16,6 +16,16 @@ class JioLiveSource implements ILiveTvSource {
   // In-memory cache for fast switching
   List<ChannelModel>? _cachedChannels;
 
+  @override
+  void clearCache() {
+    _cachedChannels = null;
+  }
+
+  /// Clear in-memory channels cache so new subscription plans immediately re-filter the catalog
+  void invalidateCache() {
+    _cachedChannels = null;
+  }
+
   // ---------------------------------------------------------------------------
   // AUTHENTICATION APIs
   // ---------------------------------------------------------------------------
@@ -156,18 +166,38 @@ class JioLiveSource implements ILiveTvSource {
       return _cachedChannels!;
     }
 
-    debugPrint('[JIO_CHANNELS] Fetching from ${ApiEndpoints.channelListUrl}');
+    final session = HiveService.getSavedSession();
+    final restrictedIds = HiveService.getRestrictedChannelIds();
+
+    debugPrint('[JIO_CHANNELS] Fetching channels. Session valid: ${session?.isValid}, Mobile: ${session?.mobileNumber}');
+    debugPrint('[JIO_CHANNELS] Active Base Plan: ${session?.hasActiveJioBase}, Active Premium: ${session?.hasActivePremium}');
+
+    http.Response? response;
     try {
-      final response = await http.get(
+      response = await http.get(
         Uri.parse(ApiEndpoints.channelListUrl),
         headers: {
           'User-Agent': ApiEndpoints.defaultUserAgent,
         },
-      );
+      ).timeout(const Duration(seconds: 8));
+    } catch (e) {
+      debugPrint('[JIO_CHANNELS] Primary v3.1 fetch failed: $e. Trying fallback...');
+    }
 
-      debugPrint('[JIO_CHANNELS] Status: ${response.statusCode}, Body bytes: ${response.body.length}');
+    // Fallback to v1.4 if primary was unavailable
+    if (response == null || response.statusCode != 200) {
+      try {
+        response = await http.get(
+          Uri.parse(ApiEndpoints.fallbackChannelListUrl),
+          headers: {'User-Agent': ApiEndpoints.defaultUserAgent},
+        ).timeout(const Duration(seconds: 8));
+      } catch (e) {
+        debugPrint('[JIO_CHANNELS] Fallback fetch failed: $e');
+      }
+    }
 
-      if (response.statusCode == 200) {
+    try {
+      if (response != null && response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final List<dynamic> list = data['result'] ?? [];
         final favs = HiveService.getFavoriteChannelIds();
@@ -186,13 +216,18 @@ class JioLiveSource implements ILiveTvSource {
               languageName: model.languageName,
               isHd: true,
               isCatchupAvailable: model.isCatchupAvailable,
+              isPremium: true,
+              planType: 'premium',
+              businessType: 'premium',
+              packageIds: const ['1', '6', '7', '23'],
+              channelPrice: model.channelPrice,
               isFavorite: model.isFavorite,
             );
           }
           return model;
         }).toList();
 
-        debugPrint('[JIO_CHANNELS] Total fetched: ${channels.length}');
+        debugPrint('[JIO_CHANNELS] Total raw fetched: ${channels.length}');
 
         // Deduplicate duplicate SD channel aliases (e.g. Colors Kannada SD, Colors SD, Colors Marathi SD, etc.)
         final sdDuplicateIds = {1368, 1369, 1370, 1325, 1326};
@@ -217,6 +252,13 @@ class JioLiveSource implements ILiveTvSource {
           return false;
         });
 
+        // =======================================================================
+        // STRONG SUBSCRIPTION FILTER ACROSS ALL PLATFORMS:
+        // Only keep channels that the logged-in mobile number has a subscription for!
+        // =======================================================================
+        final beforeFilterCount = channels.length;
+        channels.removeWhere((c) => !c.isSubscribedFor(session, restrictedIds: restrictedIds));
+        debugPrint('[JIO_SUBSCRIPTION_FILTER] Kept ${channels.length} of $beforeFilterCount subscribed channels for ${session?.mobileNumber ?? "Guest"}');
 
         // Sort: Favorites first, then Kannada channels, then others
         channels.sort((a, b) {
@@ -365,6 +407,12 @@ class JioLiveSource implements ILiveTvSource {
         }
       }
 
+      if (response.statusCode == 403) {
+        await HiveService.addRestrictedChannelId(effectiveChannelId);
+        _cachedChannels?.removeWhere((c) => c.channelId == effectiveChannelId);
+        throw Exception('This channel is not included in your Jio number\'s subscription plan.');
+      }
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final bitrates = data['bitrates'] as Map<String, dynamic>?;
@@ -432,7 +480,9 @@ class JioLiveSource implements ILiveTvSource {
 
           // Detect PayWall event stream placeholders
           if (rawStreamUrl.toLowerCase().contains('paywall')) {
-            throw Exception('This channel is an event stream currently off-air or requires a Sony LIV add-on.');
+            await HiveService.addRestrictedChannelId(effectiveChannelId);
+            _cachedChannels?.removeWhere((c) => c.channelId == effectiveChannelId);
+            throw Exception('This channel requires a premium add-on subscription for your Jio number.');
           }
 
           // Follow 302/301 redirects natively so ExoPlayer does not lose Cookie / User-Agent headers
@@ -480,6 +530,8 @@ class JioLiveSource implements ILiveTvSource {
                   throw Exception('Broadcast stream is temporarily unavailable on Jio CDN servers.');
                 }
               } else if (testPlRes.statusCode == 403) {
+                await HiveService.addRestrictedChannelId(effectiveChannelId);
+                _cachedChannels?.removeWhere((c) => c.channelId == effectiveChannelId);
                 throw Exception('Channel access restricted by broadcaster on your Jio plan.');
               }
             } catch (e) {

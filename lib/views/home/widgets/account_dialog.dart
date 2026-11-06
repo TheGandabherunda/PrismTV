@@ -189,6 +189,106 @@ class AccountDialog extends StatelessWidget {
                   ),
                 ),
 
+                const SizedBox(height: 14),
+
+                // Subscription & Channel Count Card
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.10),
+                      width: 1.0,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'NUMBER SUBSCRIPTION',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.4)),
+                            ),
+                            child: const Text(
+                              'Verified',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primaryLight,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Icon(
+                            controller.hasActivePremium ? Icons.verified_rounded : Icons.check_circle_rounded,
+                            size: 16,
+                            color: controller.hasActivePremium ? const Color(0xFFFBBF24) : const Color(0xFF10B981),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              controller.hasActivePremium
+                                  ? 'JioTV Premium Live Pack (Active)'
+                                  : (controller.hasActiveJioBase ? 'Jio Base Broadcast Plan (Active)' : 'Free-to-Air Access'),
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.live_tv_rounded, size: 16, color: AppColors.primaryLight),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${controller.totalSubscribedChannels} Channels Subscribed',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Auto-filtered: Only channels active on this number are displayed.',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: Colors.white.withValues(alpha: 0.45),
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
                 const SizedBox(height: 24),
 
                 // Action Buttons: Cancel + Log Out

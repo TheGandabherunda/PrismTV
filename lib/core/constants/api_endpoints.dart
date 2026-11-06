@@ -34,13 +34,30 @@ class ApiEndpoints {
     return '/api/proxy/apis/v2.0/loginotp/refresh?langId=6';
   }
 
-  // Catalog & Channels (Public CDN with open access - 1100+ Channels)
-  static const String channelListUrl =
-      'https://jiotv.data.cdn.jio.com/apis/v1.4/getMobileChannelList/get/?langId=6&os=android&devicetype=phone';
+  // Catalog & Channels (v3.1 includes real subscription flags: is_premium, business_type, plan_type, packageIds)
+  static String get channelListUrl {
+    if (!kIsWeb) {
+      return 'https://jiotv.data.cdn.jio.com/apis/v3.1/getMobileChannelList/get/?os=android&devicetype=phone&usertype=tvYR7NSNn7rymo3F';
+    }
+    return '$_apiBase/apis/v3.1/getMobileChannelList/get/?os=android&devicetype=phone&usertype=tvYR7NSNn7rymo3F';
+  }
+
+  static String get fallbackChannelListUrl {
+    if (!kIsWeb) {
+      return 'https://jiotv.data.cdn.jio.com/apis/v1.4/getMobileChannelList/get/?langId=6&os=android&devicetype=phone';
+    }
+    return '$_apiBase/apis/v1.4/getMobileChannelList/get/?langId=6&os=android&devicetype=phone';
+  }
+
   static const String channelLogoBaseUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/';
 
   // EPG (Electronic Program Guide)
-  static const String epgUrl = 'https://jiotv.data.cdn.jio.com/apis/v1.3/getepg/get';
+  static String get epgUrl {
+    if (!kIsWeb) {
+      return 'https://jiotv.data.cdn.jio.com/apis/v1.3/getepg/get';
+    }
+    return '$_apiBase/apis/v1.3/getepg/get';
+  }
   static const String epgPosterBaseUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/shows/';
 
   // Playback & Stream Resolution

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io' show Directory, File;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -9,7 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 /// Over-The-Air In-App GitHub Releases Update Service
 /// Enables automated update detection, release notes inspection,
 /// and in-place direct APK upgrades without uninstalling or data loss.
-class AppUpdateService extends GetxService {
+class AppUpdateService extends GetxService with WidgetsBindingObserver {
   static const String repoOwner = 'TheGandabherunda';
   static const String repoName = 'PrismTV';
   static const String channelName = 'org.thegandabherunda.prismtv/app_updater';
@@ -40,11 +41,39 @@ class AppUpdateService extends GetxService {
   @override
   void onInit() {
     super.onInit();
+    WidgetsBinding.instance.addObserver(this);
     _initNativeInfo();
     // Silent unobtrusive background update check shortly after app startup
     Future.delayed(const Duration(seconds: 4), () {
       checkForUpdates(isManual: false);
     });
+  }
+
+  @override
+  void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.onClose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkPermissionOnResume();
+    }
+  }
+
+  Future<void> _checkPermissionOnResume() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      if (showPermissionToast.value) {
+        try {
+          final canInstall = await _platformChannel.invokeMethod<bool>('canInstallUnknownApps') ?? true;
+          if (canInstall) {
+            showPermissionToast.value = false;
+            _showBottomInfoToast('Permission granted! Tap Update to continue.');
+          }
+        } catch (_) {}
+      }
+    }
   }
 
   /// Queries native Android package manager for the real compiled version and device ABI
@@ -240,6 +269,21 @@ class AppUpdateService extends GetxService {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       }
       return;
+    }
+
+    // On Android: verify "Install unknown apps" permission before starting download
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      bool canInstall = true;
+      try {
+        canInstall = await _platformChannel.invokeMethod<bool>('canInstallUnknownApps') ?? true;
+      } catch (_) {}
+
+      if (!canInstall) {
+        showPermissionToast.value = true;
+        _showBottomInfoToast('Please enable "Install unknown apps" for PrismTV to install updates.');
+        await openUnknownSourcesSettings();
+        return;
+      }
     }
 
     // On Android: Stream APK download directly to app cache and trigger native Package Installer

@@ -20,5 +20,6 @@ abstract class ILiveTvSource {
   Future<List<ChannelModel>> fetchChannels();
   Future<List<EpgProgramModel>> fetchEpg(int channelId);
   Future<StreamPlaybackInfo> resolveStream(ChannelModel channel);
+  void clearCache() {}
 }
 

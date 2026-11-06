@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../data/repositories/auth_repository.dart';
+import '../../data/repositories/channel_repository.dart';
 import '../../routes/app_routes.dart';
 
 class AuthController extends GetxController {
@@ -134,6 +135,9 @@ class AuthController extends GetxController {
     isLoading.value = false;
 
     if (session != null && session.isValid) {
+      if (Get.isRegistered<ChannelRepository>()) {
+        Get.find<ChannelRepository>().clearCache();
+      }
       _showFeedback('Verification successful! Welcome to PrismTV.');
       await Future.delayed(const Duration(milliseconds: 300));
       Get.offAllNamed(AppRoutes.splash);

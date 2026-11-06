@@ -88,9 +88,16 @@ class HomeController extends GetxController {
     super.onClose();
   }
 
-  Future<void> loadChannels() async {
+  bool get hasActivePremium => currentSession?.hasActivePremium ?? false;
+  bool get hasActiveJioBase => currentSession?.hasActiveJioBase ?? false;
+  int get totalSubscribedChannels => allChannels.length;
+
+  Future<void> loadChannels({bool refresh = false}) async {
     isLoadingChannels.value = true;
     try {
+      if (refresh) {
+        _channelRepo.clearCache();
+      }
       final list = await _channelRepo.getChannels();
       allChannels.assignAll(list);
       HiveService.saveCachedChannels(list);
@@ -457,6 +464,7 @@ class HomeController extends GetxController {
   }
 
   void logout() async {
+    _channelRepo.clearCache();
     await _authRepo.logout();
     isAuthenticated.value = false;
     Get.offAllNamed(AppRoutes.auth);

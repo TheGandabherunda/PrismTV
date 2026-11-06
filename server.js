@@ -803,6 +803,8 @@ function generateDateTime() {
       upstreamHost = 'tv.media.jio.com';
     } else if (targetPath.startsWith('/tokenservice/')) {
       upstreamHost = 'auth.media.jio.com';
+    } else if (targetPath.startsWith('/apis/v3.') || targetPath.startsWith('/apis/v1.')) {
+      upstreamHost = 'jiotv.data.cdn.jio.com';
     }
 
     console.log(`[API PROXY] ${req.method} -> https://${upstreamHost}${targetPath}`);

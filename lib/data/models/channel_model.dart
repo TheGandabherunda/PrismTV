@@ -1,4 +1,5 @@
 import '../../core/constants/api_endpoints.dart';
+import 'auth_session.dart';
 
 class ChannelModel {
   final int channelId;
@@ -10,6 +11,11 @@ class ChannelModel {
   final String languageName;
   final bool isHd;
   final bool isCatchupAvailable;
+  final bool isPremium;
+  final String planType;
+  final String businessType;
+  final List<String> packageIds;
+  final String channelPrice;
   bool isFavorite;
 
   ChannelModel({
@@ -22,6 +28,11 @@ class ChannelModel {
     required this.languageName,
     this.isHd = false,
     this.isCatchupAvailable = false,
+    this.isPremium = false,
+    this.planType = '',
+    this.businessType = '',
+    this.packageIds = const [],
+    this.channelPrice = '',
     this.isFavorite = false,
   });
 
@@ -33,6 +44,10 @@ class ChannelModel {
     categoryName: 'Sports',
     languageId: 13,
     languageName: 'Kannada',
+    isPremium: true,
+    planType: 'premium',
+    businessType: 'premium',
+    packageIds: const ['1', '6', '7', '23'],
   );
 
   String get fullLogoUrl {
@@ -60,11 +75,61 @@ class ChannelModel {
     }
   }
 
+  /// Evaluates whether this channel is included in the logged-in mobile number's active subscription plans
+  bool isSubscribedFor(AuthSession? session, {Set<int>? restrictedIds}) {
+    // 0. If marked as restricted / blocked by broadcaster on this account/device, never show
+    if (restrictedIds != null && restrictedIds.contains(channelId)) {
+      return false;
+    }
+
+    // 1. Free-to-Air / Open channels (DD channels, state broadcasts, free public feeds)
+    final bType = businessType.toLowerCase().trim();
+    final pType = planType.toLowerCase().trim();
+    final isFree = bType == 'free' ||
+        bType == 'guest' ||
+        (bType.isEmpty && pType == 'free') ||
+        (channelPrice.contains('0.00') && !isPremium && bType != 'premium');
+    if (isFree) return true;
+
+    // 2. Unauthenticated user: only free-to-air channels are viewable
+    if (session == null || !session.isValid) {
+      return false;
+    }
+
+    // 3. Premium channels (Colors HD, Sony Ten, Sony SAB, Star Gold, Cartoon Network, Discovery, etc.)
+    // In Jio v3.1 catalog, business_type == 'premium' strictly designates paywall/premium live channels
+    final isPrem = bType == 'premium' || (bType.isEmpty && isPremium);
+    if (isPrem) {
+      // Must hold an active premium live subscription on this Jio mobile number
+      return session.hasActivePremium;
+    }
+
+    // 4. Standard Jio channels (CNBC, Colors Super, etc.)
+    if (bType == 'jio' || packageIds.contains('1')) {
+      return session.hasActiveJioBase;
+    }
+
+    // 5. Specific package IDs restriction (if channel requires a custom package that doesn't include '1')
+    if (packageIds.isNotEmpty && !packageIds.contains('1')) {
+      final matchesPackage = packageIds.any((pkg) => session.activePlanIds.contains(pkg));
+      if (!matchesPackage && !session.hasActivePremium) {
+        return false;
+      }
+    }
+
+    return session.hasActiveJioBase;
+  }
+
   factory ChannelModel.fromJson(Map<String, dynamic> json) {
     final int catId = int.tryParse(json['channelCategoryId']?.toString() ?? '1') ?? 1;
     final int langId = int.tryParse(json['channelLanguageId']?.toString() ?? '6') ?? 6;
     final String name = json['channel_name'] ?? json['name'] ?? 'Channel';
     final bool hd = name.toUpperCase().contains('HD') || (json['isHD'] == true || json['isHD'] == 1);
+
+    final rawPkgs = json['packageIds'];
+    final List<String> pkgs = (rawPkgs is List)
+        ? rawPkgs.map((e) => e.toString().trim()).toList()
+        : const [];
 
     return ChannelModel(
       channelId: int.tryParse(json['channel_id']?.toString() ?? '0') ?? 0,
@@ -76,6 +141,12 @@ class ChannelModel {
       languageName: _resolveLanguage(langId),
       isHd: hd,
       isCatchupAvailable: json['isCatchupAvailable'] == true || json['isCatchupAvailable'] == 1,
+      isPremium: json['is_premium'] == true || json['isPremium'] == true,
+      planType: json['plan_type']?.toString().toLowerCase().trim() ?? json['planType']?.toString().toLowerCase().trim() ?? '',
+      businessType: json['business_type']?.toString().toLowerCase().trim() ?? json['businessType']?.toString().toLowerCase().trim() ?? '',
+      packageIds: pkgs,
+      channelPrice: json['channelPrice']?.toString() ?? '',
+      isFavorite: json['isFavorite'] == true,
     );
   }
 
@@ -88,6 +159,11 @@ class ChannelModel {
       'channelLanguageId': languageId,
       'isHD': isHd,
       'isCatchupAvailable': isCatchupAvailable,
+      'is_premium': isPremium,
+      'plan_type': planType,
+      'business_type': businessType,
+      'packageIds': packageIds,
+      'channelPrice': channelPrice,
       'isFavorite': isFavorite,
     };
   }
@@ -150,4 +226,3 @@ class ChannelModel {
     }
   }
 }
-

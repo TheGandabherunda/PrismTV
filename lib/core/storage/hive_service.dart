@@ -63,6 +63,39 @@ class HiveService {
     await box.put('favorite_channels', list);
   }
 
+  // Broadcaster Blocked / Restricted Channels for this subscriber
+  static Set<int> getRestrictedChannelIds() {
+    try {
+      final box = Hive.box(settingsBoxName);
+      final list = box.get('restricted_channels', defaultValue: <dynamic>[]);
+      return Set<int>.from(list);
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static bool isChannelRestricted(int channelId) {
+    return getRestrictedChannelIds().contains(channelId);
+  }
+
+  static Future<void> addRestrictedChannelId(int channelId) async {
+    try {
+      final box = Hive.box(settingsBoxName);
+      final set = getRestrictedChannelIds();
+      if (!set.contains(channelId)) {
+        set.add(channelId);
+        await box.put('restricted_channels', set.toList());
+      }
+    } catch (_) {}
+  }
+
+  static Future<void> clearRestrictedChannelIds() async {
+    try {
+      final box = Hive.box(settingsBoxName);
+      await box.delete('restricted_channels');
+    } catch (_) {}
+  }
+
   // Settings
   static QualityOption getPreferredQualityOption() {
     try {
