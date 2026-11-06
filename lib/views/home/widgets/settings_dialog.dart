@@ -926,7 +926,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                             Text(
                               hasUpdate
                                   ? 'An in-place direct OTA update is ready to install without losing your settings.'
-                                  : 'Current Version: v${AppUpdateService.currentVersion} • Connected to GitHub',
+                                  : 'Current Version: v${updateService.currentVersion.value} • Connected to GitHub',
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: AppColors.textSecondary,
@@ -998,14 +998,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
                           ),
                         ),
 
-                      if (!hasUpdate || isDownloading)
+                      if (!hasUpdate || isDownloading) ...[
                         Focus(
                           child: Builder(
                             builder: (ctx) {
                               final hasFocus = Focus.of(ctx).hasFocus;
                               return OutlinedButton.icon(
                                 style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                   side: BorderSide(color: hasFocus ? Colors.white : Colors.white.withValues(alpha: 0.20)),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                   backgroundColor: hasFocus ? Colors.white.withValues(alpha: 0.10) : null,
@@ -1026,6 +1026,31 @@ class _SettingsDialogState extends State<SettingsDialog> {
                             },
                           ),
                         ),
+                        if (!isDownloading) ...[
+                          const SizedBox(width: 8),
+                          Focus(
+                            child: Builder(
+                              builder: (ctx) {
+                                final hasFocus = Focus.of(ctx).hasFocus;
+                                return OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    side: BorderSide(color: hasFocus ? Colors.white : Colors.white.withValues(alpha: 0.20)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    backgroundColor: hasFocus ? Colors.white.withValues(alpha: 0.10) : null,
+                                  ),
+                                  onPressed: updateService.downloadAndInstall,
+                                  icon: const Icon(Icons.download_rounded, size: 16, color: Colors.white70),
+                                  label: const Text(
+                                    'Download & Reinstall',
+                                    style: TextStyle(color: Colors.white, fontSize: 12.5),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ],
 
                       const Spacer(),
 
@@ -1102,7 +1127,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
               child: Text(
                 notes.isNotEmpty
                     ? notes
-                    : 'PrismTV v1.0.0 initial release featuring pure progressive optical blur header, universal 1080p Full HD DASH live streams, TV remote & keyboard navigation, and responsive touch UI.',
+                    : 'PrismTV v1.0.1 update featuring 1080p DASH universal streaming, mobile gesture controls, and automated multi-platform release packages.',
                 style: const TextStyle(
                   color: Colors.white70,
                   fontSize: 12.5,

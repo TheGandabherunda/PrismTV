@@ -5,6 +5,7 @@ import 'core/constants/app_colors.dart';
 import 'core/services/app_update_service.dart';
 import 'core/services/local_stream_proxy.dart';
 import 'core/storage/hive_service.dart';
+import 'core/widgets/update_toast.dart';
 import 'data/providers/jio_live_source.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/channel_repository.dart';
@@ -78,6 +79,14 @@ class PrismTvApp extends StatelessWidget {
       ),
       initialRoute: AppPages.initial,
       getPages: AppPages.routes,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            ?child,
+            const UpdateToastOverlay(),
+          ],
+        );
+      },
     );
   }
 }

@@ -2,6 +2,7 @@ package org.thegandabherunda.prismtv
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
@@ -30,35 +31,105 @@ class MainActivity : FlutterActivity() {
 
         // 1. App Updater Channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UPDATE_CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "installApk") {
-                val filePath = call.argument<String>("filePath")
-                if (filePath != null) {
+            when (call.method) {
+                "getAppVersion" -> {
                     try {
-                        val file = File(filePath)
-                        if (!file.exists()) {
-                            result.error("FILE_NOT_FOUND", "APK file does not exist at path: $filePath", null)
-                            return@setMethodCallHandler
+                        val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            packageManager.getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
+                        } else {
+                            @Suppress("DEPRECATION")
+                            packageManager.getPackageInfo(packageName, 0)
                         }
+                        result.success(pInfo.versionName ?: "1.0.1")
+                    } catch (e: Exception) {
+                        result.success("1.0.1")
+                    }
+                }
+                "getDeviceAbi" -> {
+                    val abi = if (Build.SUPPORTED_ABIS.isNotEmpty()) Build.SUPPORTED_ABIS[0] else "arm64-v8a"
+                    result.success(abi)
+                }
+                "getCacheDir" -> {
+                    val cache = externalCacheDir ?: cacheDir
+                    result.success(cache.absolutePath)
+                }
+                "canInstallUnknownApps" -> {
+                    val canInstall = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        packageManager.canRequestPackageInstalls()
+                    } else {
+                        true
+                    }
+                    result.success(canInstall)
+                }
+                "openUnknownSourcesSettings" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        try {
+                            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                                data = Uri.parse("package:$packageName")
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("SETTINGS_ERROR", e.localizedMessage, null)
+                        }
+                    } else {
+                        result.success(true)
+                    }
+                }
+                "installApk" -> {
+                    val filePath = call.argument<String>("filePath")
+                    if (filePath != null) {
+                        try {
+                            val file = File(filePath)
+                            if (!file.exists()) {
+                                result.error("FILE_NOT_FOUND", "APK file does not exist at path: $filePath", null)
+                                return@setMethodCallHandler
+                            }
 
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            // Ensure file is readable by installer process
+                            file.setReadable(true, false)
+
+                            // Check permission on Android 8.0+
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+                                val manageIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                                    data = Uri.parse("package:$packageName")
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                startActivity(manageIntent)
+                                result.error("PERMISSION_REQUIRED", "Please allow unknown app installation for PrismTV, then tap Install again.", null)
+                                return@setMethodCallHandler
+                            }
+
                             val apkUri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                FileProvider.getUriForFile(this@MainActivity, "${packageName}.fileprovider", file)
                             } else {
                                 Uri.fromFile(file)
                             }
-                            setDataAndType(apkUri, "application/vnd.android.package-archive")
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+
+                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                            }
+
+                            val resolveInfoList = packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                            for (resolveInfo in resolveInfoList) {
+                                val targetPkg = resolveInfo.activityInfo.packageName
+                                grantUriPermission(targetPkg, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("INSTALL_ERROR", e.localizedMessage, null)
                         }
-                        context.startActivity(intent)
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("INSTALL_ERROR", e.localizedMessage, null)
+                    } else {
+                        result.error("INVALID_ARGUMENT", "File path is required", null)
                     }
-                } else {
-                    result.error("INVALID_ARGUMENT", "File path is required", null)
                 }
-            } else {
-                result.notImplemented()
+                else -> result.notImplemented()
             }
         }
 

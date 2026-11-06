@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -40,9 +41,6 @@ class HomeView extends GetView<HomeController> {
           Positioned.fill(
             child: _buildLiveTvView(context),
           ),
-
-          // Floating In-App Update Notification Pill
-          const _HomeUpdateFloatingPill(),
 
           // Floating Miniplayer (pinned to bottom-right)
           const FloatingMiniplayer(),
@@ -151,13 +149,16 @@ class HomeView extends GetView<HomeController> {
                   Expanded(
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => controller.searchFocusNode.requestFocus(),
+                      onTap: () {
+                        FocusScope.of(context).requestFocus(controller.searchFocusNode);
+                        SystemChannels.textInput.invokeMethod('TextInput.show');
+                      },
                       child: Container(
-                        height: 40,
+                        height: 42,
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         decoration: BoxDecoration(
                           color: const Color(0x38161824),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(21),
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.22),
                             width: 1.0,
@@ -171,9 +172,15 @@ class HomeView extends GetView<HomeController> {
                               child: TextField(
                                 controller: controller.searchController,
                                 focusNode: controller.searchFocusNode,
+                                onTap: () {
+                                  FocusScope.of(context).requestFocus(controller.searchFocusNode);
+                                  SystemChannels.textInput.invokeMethod('TextInput.show');
+                                },
                                 onChanged: controller.onSearchChanged,
                                 style: const TextStyle(color: Colors.white, fontSize: 13.5),
                                 cursorColor: AppColors.primaryLight,
+                                textInputAction: TextInputAction.search,
+                                keyboardType: TextInputType.text,
                                 decoration: InputDecoration(
                                   hintText: 'Search channel, language...',
                                   hintStyle: TextStyle(
@@ -435,15 +442,18 @@ class _HomeScreenFooterState extends State<_HomeScreenFooter> {
                   width: 1.0,
                 ),
               ),
-              child: const Text(
-                'v1.0.0',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.4,
-                  color: AppColors.textSecondary,
-                ),
-              ),
+              child: Obx(() {
+                final updateService = Get.find<AppUpdateService>();
+                return Text(
+                  'v${updateService.currentVersion.value}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.4,
+                    color: AppColors.textSecondary,
+                  ),
+                );
+              }),
             ),
             const SizedBox(height: 14),
 
@@ -1336,7 +1346,7 @@ class _CinejoyFilterButtonState extends State<_CinejoyFilterButton> {
           icon: Stack(
             clipBehavior: Clip.none,
             children: [
-              const Icon(Icons.tune_rounded, color: Colors.white, size: 21),
+              const Icon(Icons.filter_list_rounded, color: Colors.white, size: 22),
               if (hasActive)
                 Positioned(
                   right: -2,
@@ -2661,108 +2671,6 @@ class _AmbientAtmosphereMeshState extends State<_AmbientAtmosphereMesh>
         ),
       ),
     );
-  }
-}
-
-/// Floating In-App Update Notification Pill for Home View
-class _HomeUpdateFloatingPill extends StatelessWidget {
-  const _HomeUpdateFloatingPill();
-
-  @override
-  Widget build(BuildContext context) {
-    final updateService = Get.find<AppUpdateService>();
-    final isMobile = MediaQuery.of(context).size.width < 800;
-
-    return Obx(() {
-      if (!updateService.updateAvailable.value) {
-        return const SizedBox.shrink();
-      }
-
-      return Positioned(
-        top: isMobile ? 74 : 96,
-        left: 20,
-        right: 20,
-        child: Center(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xE8141020),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: AppColors.primaryLight.withValues(alpha: 0.65),
-                    width: 1.2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryGlow.withValues(alpha: 0.35),
-                      blurRadius: 18,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primaryLight,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'PrismTV v${updateService.latestVersion.value} Available',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    InkWell(
-                      onTap: () {
-                        final hc = Get.find<HomeController>();
-                        hc.openSettingsDialog();
-                      },
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Text(
-                          'Update',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
-                      onPressed: () => updateService.updateAvailable.value = false,
-                      splashRadius: 14,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    });
   }
 }
 

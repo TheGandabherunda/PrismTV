@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Directory, File;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -11,12 +10,15 @@ import 'package:url_launcher/url_launcher.dart';
 /// Enables automated update detection, release notes inspection,
 /// and in-place direct APK upgrades without uninstalling or data loss.
 class AppUpdateService extends GetxService {
-  static const String currentVersion = '1.0.0';
   static const String repoOwner = 'TheGandabherunda';
   static const String repoName = 'PrismTV';
   static const String channelName = 'org.thegandabherunda.prismtv/app_updater';
 
   static const MethodChannel _platformChannel = MethodChannel(channelName);
+
+  /// App Version State (Dynamically populated from native package manager)
+  final RxString currentVersion = '1.0.2'.obs;
+  String deviceAbi = 'arm64-v8a';
 
   final RxBool isChecking = false.obs;
   final RxBool updateAvailable = false.obs;
@@ -29,18 +31,72 @@ class AppUpdateService extends GetxService {
   final RxString downloadStatus = ''.obs;
   final RxString errorMessage = ''.obs;
 
+  /// Custom Toast / Overlay UI State
+  final RxBool toastDismissed = false.obs;
+  final RxBool showInfoToast = false.obs;
+  final RxString infoToastMessage = ''.obs;
+  final RxBool showPermissionToast = false.obs;
+
   @override
   void onInit() {
     super.onInit();
+    _initNativeInfo();
     // Silent unobtrusive background update check shortly after app startup
     Future.delayed(const Duration(seconds: 4), () {
       checkForUpdates(isManual: false);
     });
   }
 
-  /// Parses semver string like "v1.0.2" or "1.0.2" into comparable integer list
+  /// Queries native Android package manager for the real compiled version and device ABI
+  Future<void> _initNativeInfo() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        final ver = await _platformChannel.invokeMethod<String>('getAppVersion');
+        if (ver != null && ver.trim().isNotEmpty) {
+          final clean = ver.split('+').first.trim();
+          currentVersion.value = clean;
+          debugPrint('[AppUpdateService] Initialized native app version: $clean');
+        }
+      } catch (e) {
+        debugPrint('[AppUpdateService] Could not retrieve native app version: $e');
+      }
+
+      try {
+        final abi = await _platformChannel.invokeMethod<String>('getDeviceAbi');
+        if (abi != null && abi.trim().isNotEmpty) {
+          deviceAbi = abi.trim();
+          debugPrint('[AppUpdateService] Detected device architecture: $deviceAbi');
+        }
+      } catch (e) {
+        debugPrint('[AppUpdateService] Could not retrieve device ABI: $e');
+      }
+    }
+  }
+
+  /// Dismisses the update banner/toast for the current app session
+  void dismissToast() {
+    toastDismissed.value = true;
+  }
+
+  /// Opens Android Settings directly to the "Install Unknown Apps" permission toggle for PrismTV
+  Future<void> openUnknownSourcesSettings() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        showPermissionToast.value = false;
+        await _platformChannel.invokeMethod('openUnknownSourcesSettings');
+      } catch (e) {
+        debugPrint('[AppUpdateService] openUnknownSourcesSettings error: $e');
+      }
+    }
+  }
+
+  /// Parses semver string like "v1.0.2", "1.0.1+2", or "1.0.2-beta" into comparable integer list
   List<int> _parseVersion(String ver) {
-    final cleaned = ver.replaceAll(RegExp(r'^[vV]'), '').split('-').first.trim();
+    final cleaned = ver
+        .replaceAll(RegExp(r'^[vV]'), '')
+        .split('-').first
+        .split('+').first
+        .trim();
     return cleaned.split('.').map((e) => int.tryParse(e) ?? 0).toList();
   }
 
@@ -59,6 +115,17 @@ class AppUpdateService extends GetxService {
     return false;
   }
 
+  /// Displays an informative bottom toast that auto-dismisses after [seconds]
+  void _showBottomInfoToast(String message, {int seconds = 4}) {
+    infoToastMessage.value = message;
+    showInfoToast.value = true;
+    Future.delayed(Duration(seconds: seconds), () {
+      if (infoToastMessage.value == message) {
+        showInfoToast.value = false;
+      }
+    });
+  }
+
   /// Queries GitHub Releases API for the latest published tag
   Future<void> checkForUpdates({bool isManual = false}) async {
     if (isChecking.value) return;
@@ -66,6 +133,9 @@ class AppUpdateService extends GetxService {
     try {
       isChecking.value = true;
       errorMessage.value = '';
+
+      // Make sure we have latest local version from native before comparing
+      await _initNativeInfo();
 
       final url = Uri.parse('https://api.github.com/repos/$repoOwner/$repoName/releases/latest');
       final response = await http.get(
@@ -87,62 +157,58 @@ class AppUpdateService extends GetxService {
         releaseNotes.value = body.isNotEmpty ? body : 'General improvements, stability, and streaming optimizations.';
         releaseUrl.value = htmlUrl;
 
-        // Find APK asset
-        String foundApkUrl = '';
+        // Smart asset resolution based on device ABI
+        String bestMatchUrl = '';
+        String universalUrl = '';
+        String anyApkUrl = '';
+
         for (final asset in assets) {
           if (asset is Map<String, dynamic>) {
             final name = (asset['name'] as String? ?? '').toLowerCase();
             final download = (asset['browser_download_url'] as String? ?? '');
             if (name.endsWith('.apk')) {
-              // Prefer universal or release apk
-              if (name.contains('universal') || name.contains('arm64') || name.contains('release')) {
-                foundApkUrl = download;
-                break;
-              } else if (foundApkUrl.isEmpty) {
-                foundApkUrl = download;
+              if (deviceAbi.contains('arm64') && name.contains('arm64')) {
+                bestMatchUrl = download;
+              } else if ((deviceAbi.contains('armeabi') || deviceAbi.contains('v7a')) && name.contains('armeabi')) {
+                bestMatchUrl = download;
+              } else if (deviceAbi.contains('x86_64') && name.contains('x86_64')) {
+                bestMatchUrl = download;
+              }
+
+              if (name.contains('universal')) {
+                universalUrl = download;
+              }
+              if (anyApkUrl.isEmpty) {
+                anyApkUrl = download;
               }
             }
           }
         }
 
-        apkDownloadUrl.value = foundApkUrl.isNotEmpty ? foundApkUrl : htmlUrl;
+        if (bestMatchUrl.isNotEmpty) {
+          apkDownloadUrl.value = bestMatchUrl;
+        } else if (universalUrl.isNotEmpty) {
+          apkDownloadUrl.value = universalUrl;
+        } else if (anyApkUrl.isNotEmpty) {
+          apkDownloadUrl.value = anyApkUrl;
+        } else {
+          apkDownloadUrl.value = htmlUrl;
+        }
 
-        final hasNewer = isNewerVersion(currentVersion, tagName);
+        final hasNewer = isNewerVersion(currentVersion.value, tagName);
         updateAvailable.value = hasNewer;
 
-        if (isManual) {
-          if (hasNewer) {
-            Get.snackbar(
-              'Update Available',
-              'PrismTV v${latestVersion.value} is ready for installation.',
-              snackPosition: SnackPosition.BOTTOM,
-              backgroundColor: const Color(0xEE161824),
-              colorText: Colors.white,
-              duration: const Duration(seconds: 5),
-            );
-          } else {
-            Get.snackbar(
-              'Up to Date',
-              'You are running the latest version of PrismTV (v$currentVersion).',
-              snackPosition: SnackPosition.BOTTOM,
-              backgroundColor: const Color(0xEE161824),
-              colorText: Colors.white,
-              duration: const Duration(seconds: 4),
-            );
-          }
+        if (hasNewer) {
+          // Un-dismiss toast so the notification pill appears cleanly at bottom
+          toastDismissed.value = false;
+        } else if (isManual) {
+          _showBottomInfoToast('PrismTV is up to date (v${currentVersion.value})');
         }
       } else if (response.statusCode == 404) {
-        // No release published on GitHub yet
         updateAvailable.value = false;
-        latestVersion.value = currentVersion;
+        latestVersion.value = currentVersion.value;
         if (isManual) {
-          Get.snackbar(
-            'PrismTV v$currentVersion',
-            'No newer release found on GitHub.',
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: const Color(0xEE161824),
-            colorText: Colors.white,
-          );
+          _showBottomInfoToast('PrismTV is up to date (v${currentVersion.value})');
         }
       } else {
         errorMessage.value = 'GitHub API status: ${response.statusCode}';
@@ -150,13 +216,7 @@ class AppUpdateService extends GetxService {
     } catch (e) {
       errorMessage.value = e.toString();
       if (isManual) {
-        Get.snackbar(
-          'Update Check Failed',
-          'Could not connect to GitHub. Please check your internet connection.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: const Color(0xEE161824),
-          colorText: Colors.white,
-        );
+        _showBottomInfoToast('Could not check for updates. Check internet connection.');
       }
     } finally {
       isChecking.value = false;
@@ -169,7 +229,7 @@ class AppUpdateService extends GetxService {
 
     final targetUrl = apkDownloadUrl.value.isNotEmpty ? apkDownloadUrl.value : releaseUrl.value;
     if (targetUrl.isEmpty) {
-      Get.snackbar('Error', 'Download URL is not available.', snackPosition: SnackPosition.BOTTOM);
+      _showBottomInfoToast('Download URL is not available.');
       return;
     }
 
@@ -182,50 +242,77 @@ class AppUpdateService extends GetxService {
       return;
     }
 
-    // On Android: Stream APK download directly to local cache and trigger native Package Installer
+    // On Android: Stream APK download directly to app cache and trigger native Package Installer
     try {
       isDownloading.value = true;
       downloadProgress.value = 0.0;
-      downloadStatus.value = 'Starting download...';
+      downloadStatus.value = 'Connecting to download server...';
+      showPermissionToast.value = false;
+      showInfoToast.value = false;
 
-      final client = http.Client();
-      final request = http.Request('GET', Uri.parse(targetUrl));
-      final response = await client.send(request);
+      // Query native cache directory configured in file_paths.xml (<cache-path name="cache" path="." />)
+      String cachePath = '';
+      try {
+        final nativeCache = await _platformChannel.invokeMethod<String>('getCacheDir');
+        if (nativeCache != null && nativeCache.isNotEmpty) {
+          cachePath = nativeCache;
+        }
+      } catch (_) {}
 
-      if (response.statusCode != 200) {
-        throw Exception('Download failed with status: ${response.statusCode}');
+      final baseDir = cachePath.isNotEmpty ? Directory(cachePath) : Directory.systemTemp;
+      if (!await baseDir.exists()) {
+        await baseDir.create(recursive: true);
       }
 
-      final contentLength = response.contentLength ?? 0;
-      final tempDir = Directory.systemTemp;
-      final apkFile = File('${tempDir.path}/PrismTV_v${latestVersion.value}.apk');
+      final verName = latestVersion.value.isNotEmpty ? latestVersion.value : 'update';
+      final apkFile = File('${baseDir.path}/PrismTV_$verName.apk');
 
       if (await apkFile.exists()) {
-        await apkFile.delete();
+        try {
+          await apkFile.delete();
+        } catch (_) {}
       }
 
-      final sink = apkFile.openWrite();
-      int received = 0;
+      final client = http.Client();
+      try {
+        final request = http.Request('GET', Uri.parse(targetUrl));
+        request.headers['User-Agent'] = 'PrismTV-AppUpdateService';
+        final response = await client.send(request);
 
-      await for (final chunk in response.stream) {
-        sink.add(chunk);
-        received += chunk.length;
-        if (contentLength > 0) {
-          final progress = received / contentLength;
-          downloadProgress.value = progress;
-          final mbReceived = (received / (1024 * 1024)).toStringAsFixed(1);
-          final mbTotal = (contentLength / (1024 * 1024)).toStringAsFixed(1);
-          downloadStatus.value = '$mbReceived MB / $mbTotal MB (${(progress * 100).toInt()}%)';
-        } else {
-          final mbReceived = (received / (1024 * 1024)).toStringAsFixed(1);
-          downloadStatus.value = '$mbReceived MB downloaded';
+        if (response.statusCode != 200) {
+          throw Exception('Download failed with status: ${response.statusCode}');
         }
+
+        final contentLength = response.contentLength ?? 0;
+        final sink = apkFile.openWrite();
+        int received = 0;
+
+        await for (final chunk in response.stream) {
+          sink.add(chunk);
+          received += chunk.length;
+          if (contentLength > 0) {
+            final progress = (received / contentLength).clamp(0.0, 1.0);
+            downloadProgress.value = progress;
+            final mbReceived = (received / (1024 * 1024)).toStringAsFixed(1);
+            final mbTotal = (contentLength / (1024 * 1024)).toStringAsFixed(1);
+            downloadStatus.value = '$mbReceived MB / $mbTotal MB (${(progress * 100).toInt()}%)';
+          } else {
+            final mbReceived = (received / (1024 * 1024)).toStringAsFixed(1);
+            downloadStatus.value = '$mbReceived MB downloaded';
+          }
+        }
+
+        await sink.flush();
+        await sink.close();
+      } finally {
+        client.close();
       }
 
-      await sink.flush();
-      await sink.close();
+      downloadProgress.value = 1.0;
+      downloadStatus.value = 'Download complete. Launching installer...';
 
-      downloadStatus.value = 'Verifying and installing...';
+      // Small delay to let the UI reflect 100% completion before opening native installer sheet
+      await Future.delayed(const Duration(milliseconds: 500));
 
       // Invoke native Android Package Installer via MethodChannel
       try {
@@ -233,30 +320,20 @@ class AppUpdateService extends GetxService {
           'filePath': apkFile.path,
         });
         if (result == true) {
-          downloadStatus.value = 'Installer opened';
+          downloadStatus.value = 'Package installer opened';
         }
       } on PlatformException catch (e) {
-        // Fallback: open via external application
-        final uri = Uri.parse(targetUrl);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (e.code == 'PERMISSION_REQUIRED') {
+          showPermissionToast.value = true;
+          downloadStatus.value = 'Permission required to install unknown apps';
         } else {
-          errorMessage.value = 'Failed to launch installer: ${e.message}';
+          errorMessage.value = 'Installer error: ${e.message}';
+          _showBottomInfoToast('Installer error: ${e.message}');
         }
       }
     } catch (e) {
       errorMessage.value = 'Download error: $e';
-      Get.snackbar(
-        'Update Error',
-        'Could not complete in-app download. Opening GitHub releases...',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: const Color(0xEE161824),
-        colorText: Colors.white,
-      );
-      final uri = Uri.parse(targetUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
+      _showBottomInfoToast('Could not complete in-app download: $e');
     } finally {
       isDownloading.value = false;
     }
