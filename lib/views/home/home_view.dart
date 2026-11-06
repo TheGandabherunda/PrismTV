@@ -60,13 +60,13 @@ class HomeView extends GetView<HomeController> {
         // The shelves list scrolls underneath the Apple-like progressive blur header!
         Positioned.fill(
           child: isMobile
-              ? _buildShelvesList(isMobile: true)
+              ? _buildShelvesList(context, isMobile: true)
               : Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Scrollable Shelves Layer
                     Expanded(
-                      child: _buildShelvesList(isMobile: false),
+                      child: _buildShelvesList(context, isMobile: false),
                     ),
 
                     // Right Side Column: Shows Hovered/Selected Channel & Current Event Info
@@ -96,7 +96,7 @@ class HomeView extends GetView<HomeController> {
           left: 0,
           right: 0,
           child: _ApplePureProgressiveBlurHeader(
-            height: isMobile ? 80.0 : 115.0,
+            height: isMobile ? (MediaQuery.of(context).padding.top + 104.0) : 115.0,
             child: _buildTopHeader(context),
           ),
         ),
@@ -108,121 +108,109 @@ class HomeView extends GetView<HomeController> {
     final isMobile = MediaQuery.of(context).size.width < 800;
 
     if (isMobile) {
-      return Obx(() {
-        if (controller.isMobileSearchOpen.value) {
-          // Mobile Search Expanded Bar
-          return Container(
-            height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 22),
-                  onPressed: controller.closeMobileSearch,
-                  splashRadius: 20,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Container(
-                    height: 40,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0x38161824),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.22),
-                        width: 1.0,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.search_rounded, size: 18, color: AppColors.primaryLight),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: controller.searchController,
-                            onChanged: controller.onSearchChanged,
-                            autofocus: true,
-                            style: const TextStyle(color: Colors.white, fontSize: 13.5),
-                            cursorColor: AppColors.primaryLight,
-                            decoration: InputDecoration(
-                              hintText: 'Search channel, language...',
-                              hintStyle: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.40),
-                                fontSize: 13,
-                              ),
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                            ),
-                          ),
-                        ),
-                        if (controller.searchQuery.value.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
-                            onPressed: controller.clearSearch,
-                            splashRadius: 16,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _CinejoyFilterButton(controller: controller, isMobile: true),
-              ],
-            ),
-          );
-        }
-
-        // Mobile Standard Header
-        return Container(
-          height: 64,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
+      return SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Left: Logo & Brand
+              // Top Row: Logo & Brand on Left, Settings & Profile on Right
               Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  PrismTriangleLogo(size: 28, hasGlow: true),
-                  SizedBox(width: 8),
-                  Text(
-                    'PrismTV',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
-                    ),
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      PrismTriangleLogo(size: 28, hasGlow: true),
+                      SizedBox(width: 8),
+                      Text(
+                        'PrismTV',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                    ],
                   ),
+                  const Spacer(),
+                  _HeaderSettingsButton(onTap: controller.openSettingsDialog),
+                  const SizedBox(width: 8),
+                  Obx(() => _HeaderAccountButton(
+                    isAuthenticated: controller.isAuthenticated.value,
+                    onTap: controller.onProfileTapped,
+                  )),
                 ],
               ),
-              const Spacer(),
-              // Right: Search Button, Filter Button, Settings, Profile
-              IconButton(
-                icon: const Icon(Icons.search_rounded, color: Colors.white, size: 21),
-                onPressed: controller.openMobileSearch,
-                splashRadius: 20,
-                tooltip: 'Search',
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              const SizedBox(height: 8),
+
+              // Persistent Search Bar & Filter Button Row side-by-side
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => controller.searchFocusNode.requestFocus(),
+                      child: Container(
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0x38161824),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.22),
+                            width: 1.0,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.search_rounded, size: 18, color: AppColors.primaryLight),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: controller.searchController,
+                                focusNode: controller.searchFocusNode,
+                                onChanged: controller.onSearchChanged,
+                                style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                                cursorColor: AppColors.primaryLight,
+                                decoration: InputDecoration(
+                                  hintText: 'Search channel, language...',
+                                  hintStyle: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.40),
+                                    fontSize: 13,
+                                  ),
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                                ),
+                              ),
+                            ),
+                            Obx(() {
+                              if (controller.searchQuery.value.isNotEmpty) {
+                                return IconButton(
+                                  icon: const Icon(Icons.close_rounded, size: 16, color: Colors.white70),
+                                  onPressed: controller.clearSearch,
+                                  splashRadius: 16,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            }),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _CinejoyFilterButton(controller: controller, isMobile: true),
+                ],
               ),
-              const SizedBox(width: 4),
-              _CinejoyFilterButton(controller: controller, isMobile: true),
-              const SizedBox(width: 4),
-              _HeaderSettingsButton(onTap: controller.openSettingsDialog),
-              const SizedBox(width: 4),
-              Obx(() => _HeaderAccountButton(
-                isAuthenticated: controller.isAuthenticated.value,
-                onTap: controller.onProfileTapped,
-              )),
             ],
           ),
-        );
-      });
+        ),
+      );
     }
 
     // Desktop Header (100% UNCHANGED!)
@@ -279,14 +267,16 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildShelvesList({bool isMobile = false}) {
+  Widget _buildShelvesList(BuildContext context, {bool isMobile = false}) {
+    final topOffset = isMobile ? (MediaQuery.of(context).padding.top + 108.0) : 136.0;
+
     return Obx(() {
       if (controller.isLoadingChannels.value) {
         return Shimmer(
           child: ListView(
             physics: const NeverScrollableScrollPhysics(),
             padding: EdgeInsets.only(
-              top: isMobile ? 100 : 136,
+              top: topOffset,
               bottom: isMobile ? 32 : 48,
             ),
             children: const [
@@ -302,7 +292,7 @@ class HomeView extends GetView<HomeController> {
       if (sections.isEmpty) {
         return Center(
           child: Padding(
-            padding: EdgeInsets.only(top: isMobile ? 100 : 140),
+            padding: EdgeInsets.only(top: topOffset),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -334,7 +324,7 @@ class HomeView extends GetView<HomeController> {
       return ListView.builder(
         physics: const BouncingScrollPhysics(),
         padding: EdgeInsets.only(
-          top: isMobile ? 100 : 136,
+          top: topOffset,
           bottom: isMobile ? 32 : 48,
         ),
         itemCount: sections.length + 1,
@@ -370,8 +360,15 @@ class _HomeScreenFooterState extends State<_HomeScreenFooter> {
 
   Future<void> _openRepo() async {
     final uri = Uri.parse('https://github.com/TheGandabherunda/PrismTV');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched) {
+        await launchUrl(uri, mode: LaunchMode.platformDefault);
+      }
+    } catch (_) {
+      try {
+        await launchUrl(uri);
+      } catch (_) {}
     }
   }
 
@@ -478,6 +475,7 @@ class _HomeScreenFooterState extends State<_HomeScreenFooter> {
               onEnter: (_) => setState(() => _isRepoHovered = true),
               onExit: (_) => setState(() => _isRepoHovered = false),
               child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: _openRepo,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
@@ -555,66 +553,36 @@ class _ApplePureProgressiveBlurHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scale = height / 115.0;
-
     return SizedBox(
       height: height,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Optical slices: ZERO TINT, ZERO COLOR scrim, PURE optical glass diffusion
-          IgnorePointer(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                _OpticalBlurSlice(height: 115 * scale, sigma: 0.08),
-                _OpticalBlurSlice(height: 105 * scale, sigma: 0.35),
-                _OpticalBlurSlice(height: 95 * scale, sigma: 0.85),
-                _OpticalBlurSlice(height: 85 * scale, sigma: 1.60),
-                _OpticalBlurSlice(height: 75 * scale, sigma: 2.60),
-                _OpticalBlurSlice(height: 68 * scale, sigma: 3.80),
-                _OpticalBlurSlice(height: 60 * scale, sigma: 5.20),
-                _OpticalBlurSlice(height: 52 * scale, sigma: 6.80),
-                _OpticalBlurSlice(height: 44 * scale, sigma: 8.20),
-                _OpticalBlurSlice(height: 36 * scale, sigma: 9.50),
-                _OpticalBlurSlice(height: 28 * scale, sigma: 10.50),
-                _OpticalBlurSlice(height: 20 * scale, sigma: 11.00),
-                _OpticalBlurSlice(height: 12 * scale, sigma: 11.00),
-              ],
+          // Single high-performance pure untinted optical blur (zero tint, zero color, locked 120 FPS)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: const SizedBox.expand(),
+                ),
+              ),
             ),
           ),
 
           // Header Content (Brand Logo, Search Capsule, Settings & Profile)
-          child,
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: child,
+          ),
         ],
       ),
     );
   }
 }
 
-/// Pure optical backdrop slice: ZERO COLOR, ZERO TINT, PURE OPTICAL DIFFUSION
-class _OpticalBlurSlice extends StatelessWidget {
-  final double height;
-  final double sigma;
-
-  const _OpticalBlurSlice({required this.height, required this.sigma});
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      height: height,
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-          child: const SizedBox.expand(),
-        ),
-      ),
-    );
-  }
-}
 
 /// Settings Icon Button with Subtle Glow and Glass Finish
 class _HeaderSettingsButton extends StatefulWidget {
@@ -2076,7 +2044,7 @@ class _CategoryShelfState extends State<_CategoryShelf> {
                   ),
                 ),
 
-                // 2. Left Edge Progressive Fade & Blur (fades cards seamlessly into obsidian canvas)
+                // 2. Left Edge Progressive Fade (fades cards seamlessly into obsidian canvas)
                 Positioned(
                   left: 0,
                   top: 0,
@@ -2087,24 +2055,19 @@ class _CategoryShelfState extends State<_CategoryShelf> {
                       opacity: _canScrollLeft ? 1.0 : 0.0,
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutCubic,
-                      child: ClipRect(
-                        child: BackdropFilter(
-                          filter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 0),
-                          child: const DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                                colors: [
-                                  Color(0xFF07080C),
-                                  Color(0xEB07080C),
-                                  Color(0x8007080C),
-                                  Color(0x1F07080C),
-                                  Colors.transparent,
-                                ],
-                                stops: [0.0, 0.28, 0.60, 0.82, 1.0],
-                              ),
-                            ),
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              Color(0xFF07080C),
+                              Color(0xEB07080C),
+                              Color(0x8007080C),
+                              Color(0x1F07080C),
+                              Colors.transparent,
+                            ],
+                            stops: [0.0, 0.28, 0.60, 0.82, 1.0],
                           ),
                         ),
                       ),
@@ -2112,7 +2075,7 @@ class _CategoryShelfState extends State<_CategoryShelf> {
                   ),
                 ),
 
-                // 3. Right Edge Progressive Fade & Blur (fades cards seamlessly into obsidian canvas)
+                // 3. Right Edge Progressive Fade (fades cards seamlessly into obsidian canvas)
                 Positioned(
                   right: 0,
                   top: 0,
@@ -2123,24 +2086,19 @@ class _CategoryShelfState extends State<_CategoryShelf> {
                       opacity: _canScrollRight ? 1.0 : 0.0,
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutCubic,
-                      child: ClipRect(
-                        child: BackdropFilter(
-                          filter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 0),
-                          child: const DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.centerRight,
-                                end: Alignment.centerLeft,
-                                colors: [
-                                  Color(0xFF07080C),
-                                  Color(0xEB07080C),
-                                  Color(0x8007080C),
-                                  Color(0x1F07080C),
-                                  Colors.transparent,
-                                ],
-                                stops: [0.0, 0.28, 0.60, 0.82, 1.0],
-                              ),
-                            ),
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerRight,
+                            end: Alignment.centerLeft,
+                            colors: [
+                              Color(0xFF07080C),
+                              Color(0xEB07080C),
+                              Color(0x8007080C),
+                              Color(0x1F07080C),
+                              Colors.transparent,
+                            ],
+                            stops: [0.0, 0.28, 0.60, 0.82, 1.0],
                           ),
                         ),
                       ),

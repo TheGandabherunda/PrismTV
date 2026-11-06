@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../core/constants/api_endpoints.dart';
+import '../../core/services/local_stream_proxy.dart';
 import '../../core/storage/hive_service.dart';
 import '../models/auth_session.dart';
 import '../models/channel_model.dart';
@@ -155,6 +156,7 @@ class JioLiveSource implements ILiveTvSource {
       return _cachedChannels!;
     }
 
+    debugPrint('[JIO_CHANNELS] Fetching from ${ApiEndpoints.channelListUrl}');
     try {
       final response = await http.get(
         Uri.parse(ApiEndpoints.channelListUrl),
@@ -162,6 +164,8 @@ class JioLiveSource implements ILiveTvSource {
           'User-Agent': ApiEndpoints.defaultUserAgent,
         },
       );
+
+      debugPrint('[JIO_CHANNELS] Status: ${response.statusCode}, Body bytes: ${response.body.length}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -171,13 +175,37 @@ class JioLiveSource implements ILiveTvSource {
         final channels = list.map((item) {
           final model = ChannelModel.fromJson(item as Map<String, dynamic>);
           model.isFavorite = favs.contains(model.channelId);
+          if (model.channelId == 3585) {
+            return ChannelModel(
+              channelId: 3585,
+              channelName: 'Sony LIV Sports Ten 4 Kannada HD',
+              logoUrl: model.logoUrl,
+              categoryId: model.categoryId,
+              categoryName: model.categoryName,
+              languageId: model.languageId,
+              languageName: model.languageName,
+              isHd: true,
+              isCatchupAvailable: model.isCatchupAvailable,
+              isFavorite: model.isFavorite,
+            );
+          }
           return model;
         }).toList();
 
+        debugPrint('[JIO_CHANNELS] Total fetched: ${channels.length}');
+
         // Deduplicate duplicate SD channel aliases (e.g. Colors Kannada SD, Colors SD, Colors Marathi SD, etc.)
         final sdDuplicateIds = {1368, 1369, 1370, 1325, 1326};
+        // Remove dead / inactive PayWall event placeholders (which return 404 on Jio CDN)
+        final deadPaywallIds = {3528, 3397, 3398, 3374, 3376};
         channels.removeWhere((c) {
           if (sdDuplicateIds.contains(c.channelId)) return true;
+          if (deadPaywallIds.contains(c.channelId)) return true;
+          // Filter out internal JioFiber STB multicast feeds (not playable on mobile/OTT)
+          final nameUpper = c.channelName.toUpperCase().trim();
+          if (nameUpper.endsWith(' STB') || nameUpper.contains(' STB ') || nameUpper.endsWith('_STB')) {
+            return true;
+          }
           final nameLower = c.channelName.toLowerCase().trim();
           if (nameLower.endsWith(' sd')) {
             final baseName = nameLower.substring(0, nameLower.length - 3).trim();
@@ -188,6 +216,7 @@ class JioLiveSource implements ILiveTvSource {
           }
           return false;
         });
+
 
         // Sort: Favorites first, then Kannada channels, then others
         channels.sort((a, b) {
@@ -201,9 +230,10 @@ class JioLiveSource implements ILiveTvSource {
         _cachedChannels = channels;
         return channels;
       }
-    } catch (_) {}
+    } catch (e, st) {
+      debugPrint('[JIO_CHANNELS_ERR] $e\n$st');
+    }
 
-    // Fallback default sample channels if network is unreachable
     return _buildSampleChannels();
   }
 
@@ -274,7 +304,18 @@ class JioLiveSource implements ILiveTvSource {
       final beginStr = '$yyyy$mm${dd}T$hh$mi$ss';
       final srnoStr = '$yyyy$mm$dd';
 
-      final effectiveChannelId = channel.channelId;
+      int effectiveChannelId = channel.channelId;
+      // Auto-route paywalled / inactive Sony LIV event pop-up aliases to their active 24/7 live broadcast feeds
+      if (effectiveChannelId == 3528) {
+        // Sony Liv Sports 4 Kannada -> Sony Sports Ten 4 Kannada
+        effectiveChannelId = 3585;
+      } else if (effectiveChannelId == 3397) {
+        // Sony LIV Sports 4 Tamil -> Sony Ten 4 Tamil
+        effectiveChannelId = 1774;
+      } else if (effectiveChannelId == 3398) {
+        // Sony LIV Sports 4 Telugu -> Sony Ten 4 Telugu
+        effectiveChannelId = 1775;
+      }
       final formBody = 'channel_id=$effectiveChannelId&stream_type=Seek&begin=$beginStr&srno=$srnoStr';
 
       final requestHeaders = {
@@ -301,11 +342,28 @@ class JioLiveSource implements ILiveTvSource {
         'ssotoken': session.ssoToken,
       };
 
-      final response = await http.post(
+      var response = await http.post(
         Uri.parse(ApiEndpoints.playbackBaseUrl),
         headers: requestHeaders,
         body: formBody,
       );
+
+      // Automatic token refresh if session expired (419 / 401)
+      if ((response.statusCode == 419 || response.statusCode == 401) && session.ssoToken.isNotEmpty) {
+        debugPrint('[JIO_STREAM] Playback returned ${response.statusCode}. Refreshing SSO token...');
+        final refreshed = await refreshSession(session);
+        if (refreshed != null && refreshed.ssoToken != session.ssoToken) {
+          requestHeaders['accessToken'] = refreshed.accessToken;
+          requestHeaders['accesstoken'] = refreshed.accessToken;
+          requestHeaders['ssoToken'] = refreshed.ssoToken;
+          requestHeaders['ssotoken'] = refreshed.ssoToken;
+          response = await http.post(
+            Uri.parse(ApiEndpoints.playbackBaseUrl),
+            headers: requestHeaders,
+            body: formBody,
+          );
+        }
+      }
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -339,31 +397,101 @@ class JioLiveSource implements ILiveTvSource {
             rawStreamUrl = hlsFallbackUrl;
           }
         } else {
-          // On Native Android TV / Mobile, standard video_player uses ExoPlayer for HLS streams.
-          rawStreamUrl = hlsFallbackUrl;
-          if (rawStreamUrl.isEmpty && mpd != null) {
-            rawStreamUrl = (mpd['result'] as String?) ?? '';
+          // On Native Android TV / Mobile, prefer Widevine MPEG-DASH for authentic 1080p Full HD studio broadcast.
+          // Jio caps mobile HLS fallback at 360p or 480p, while WDVLive MPEG-DASH contains
+          // full 1080p (1920x1080 @ 2.3+ Mbps AVC High Profile) studio broadcasts.
+          if (mpd != null) {
+            final mpdBitrates = mpd['bitrates'] as Map<String, dynamic>?;
+            final autoMpd = mpdBitrates != null ? (mpdBitrates['auto'] as String? ?? mpdBitrates['high'] as String?) : null;
+            rawStreamUrl = (mpd['result'] as String?) ?? autoMpd ?? '';
             drmLicenseUrl = (mpd['key'] as String?) ?? '';
+          }
+          if (rawStreamUrl.isEmpty) {
+            rawStreamUrl = hlsFallbackUrl;
           }
         }
 
         if (rawStreamUrl.isNotEmpty) {
-          // Extract hdnea if present anywhere
+          // Extract hdnea if present anywhere (query params, enclosing URL, or response data)
           String hdnea = '';
-          final match = RegExp(r'hdnea=([^&]+)').firstMatch(rawStreamUrl);
-          if (match != null) {
-            hdnea = match.group(1) ?? '';
+          final hdneaRegex = RegExp(r'(?:__hdnea__|hdnea)=([^&]+)');
+          final match = hdneaRegex.firstMatch(rawStreamUrl) ??
+              hdneaRegex.firstMatch(hlsFallbackUrl) ??
+              (data['result'] != null ? hdneaRegex.firstMatch(data['result'].toString()) : null);
+          if (match != null && match.group(1) != null) {
+            hdnea = match.group(1)!;
+          }
+          if (hdnea.isEmpty && data['token'] != null) {
+            hdnea = data['token'].toString().trim();
           }
 
-          if (hdnea.isNotEmpty && !rawStreamUrl.contains('hdnea=')) {
+          if (hdnea.isNotEmpty && !rawStreamUrl.contains('__hdnea__=') && !rawStreamUrl.contains('hdnea=')) {
             final sep = rawStreamUrl.contains('?') ? '&' : '?';
-            rawStreamUrl = '$rawStreamUrl${sep}hdnea=$hdnea';
+            rawStreamUrl = '$rawStreamUrl${sep}__hdnea__=$hdnea';
+          }
+
+          // Detect PayWall event stream placeholders
+          if (rawStreamUrl.toLowerCase().contains('paywall')) {
+            throw Exception('This channel is an event stream currently off-air or requires a Sony LIV add-on.');
+          }
+
+          // Follow 302/301 redirects natively so ExoPlayer does not lose Cookie / User-Agent headers
+          if (!kIsWeb && rawStreamUrl.isNotEmpty) {
+            try {
+              final headReq = http.Request('HEAD', Uri.parse(rawStreamUrl))
+                ..followRedirects = false
+                ..headers['User-Agent'] = 'plaYtv/7.1.8 (Linux;Android 8.1.0) ExoPlayerLib/2.11.7';
+              if (hdnea.isNotEmpty) {
+                headReq.headers['Cookie'] = '__hdnea__=$hdnea; ssotoken=${session.ssoToken}';
+              }
+              final headRes = await headReq.send();
+              if (headRes.statusCode >= 300 && headRes.statusCode < 400 && headRes.headers['location'] != null) {
+                final loc = headRes.headers['location']!;
+                rawStreamUrl = Uri.parse(rawStreamUrl).resolve(loc).toString();
+                debugPrint('[JIO_STREAM] Resolved 302 redirect to: $rawStreamUrl');
+                final redirMatch = hdneaRegex.firstMatch(rawStreamUrl);
+                if (redirMatch != null && redirMatch.group(1) != null) {
+                  hdnea = redirMatch.group(1)!;
+                }
+              }
+            } catch (e) {
+              debugPrint('[JIO_STREAM_REDIRECT_ERR] $e');
+            }
+          }
+
+          debugPrint('[JIO_STREAM] ch=${channel.channelId} hasHdnea=${hdnea.isNotEmpty} url=$rawStreamUrl');
+
+          // Validate playlist availability in Dart before handing to ExoPlayer
+          if (!kIsWeb && rawStreamUrl.isNotEmpty) {
+            try {
+              final testPlRes = await http.get(Uri.parse(rawStreamUrl), headers: {
+                'User-Agent': 'plaYtv/7.1.8 (Linux;Android 8.1.0) ExoPlayerLib/2.11.7',
+                if (hdnea.isNotEmpty) 'Cookie': '__hdnea__=$hdnea; ssotoken=${session.ssoToken}',
+              });
+              debugPrint('[JIO_PLAYLIST_DART] status=${testPlRes.statusCode} length=${testPlRes.body.length}');
+              if (testPlRes.statusCode == 404) {
+                if (rawStreamUrl.contains('.mpd') && hlsFallbackUrl.isNotEmpty && hlsFallbackUrl != rawStreamUrl) {
+                  debugPrint('[JIO_PLAYLIST_DART] MPD 404, falling back to HLS...');
+                  rawStreamUrl = hlsFallbackUrl;
+                  drmLicenseUrl = '';
+                } else if (mpd != null && (mpd['key'] != null || mpd['result'] != null)) {
+                  throw Exception('Channel restricted: Broadcaster requires Widevine DRM (unavailable on mobile HLS).');
+                } else {
+                  throw Exception('Broadcast stream is temporarily unavailable on Jio CDN servers.');
+                }
+              } else if (testPlRes.statusCode == 403) {
+                throw Exception('Channel access restricted by broadcaster on your Jio plan.');
+              }
+            } catch (e) {
+              if (e.toString().contains('Exception:')) rethrow;
+              debugPrint('[JIO_PLAYLIST_DART_ERR] $e');
+            }
           }
 
           // Build proxied HLS fallback URL if DASH stream has missing video/audio
           String proxiedHlsFallback = '';
           if (hlsFallbackUrl.isNotEmpty && kIsWeb) {
-            final hlsMatch = RegExp(r'hdnea=([^&]+)').firstMatch(hlsFallbackUrl);
+            final hlsMatch = hdneaRegex.firstMatch(hlsFallbackUrl);
             final hlsHdnea = hlsMatch?.group(1) ?? hdnea;
             final hlsParams = <String, String>{
               'url': hlsFallbackUrl,
@@ -394,11 +522,13 @@ class JioLiveSource implements ILiveTvSource {
               .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
               .join('&');
 
+          final isDASH = rawStreamUrl.contains('.mpd');
+
           final finalStreamUrl = kIsWeb
               ? '${ApiEndpoints.streamProxyUrl}?$queryString'
-              : rawStreamUrl;
-
-          final isDASH = rawStreamUrl.contains('.mpd');
+              : (isDASH
+                  ? LocalStreamProxy.getProxiedMpdUrl(rawStreamUrl, hdnea: hdnea, channelId: effectiveChannelId)
+                  : LocalStreamProxy.getProxiedUrl(rawStreamUrl, hdnea: hdnea, channelId: effectiveChannelId));
 
           return StreamPlaybackInfo(
             streamUrl: finalStreamUrl,
@@ -408,20 +538,45 @@ class JioLiveSource implements ILiveTvSource {
               'ssotoken': session.ssoToken,
               'accesstoken': session.accessToken,
               'crmid': session.crmid,
-              'channelId': channel.channelId.toString(),
-              'Cookie': 'ssotoken=${session.ssoToken}${hdnea.isNotEmpty ? '; __hdnea__=$hdnea' : ''}',
+              'userId': session.crmid,
+              'subscriberId': session.crmid,
+              'uniqueId': session.uniqueId,
+              'deviceId': '689f928e469502ab',
+              'devicetype': 'phone',
+              'isott': 'false',
+              'languageId': '6',
+              'lbcookie': '1',
+              'os': 'android',
+              'osVersion': '13',
+              'srno': srnoStr,
+              'usergroup': 'tvYR7NSNn7rymo3F',
+              'channelId': effectiveChannelId.toString(),
+              'Cookie': hdnea.isNotEmpty
+                  ? '__hdnea__=$hdnea; ssotoken=${session.ssoToken}'
+                  : 'ssotoken=${session.ssoToken}',
+              if (drmLicenseUrl.isNotEmpty)
+                'X-Drm-License-Url': LocalStreamProxy.getDrmLicenseUrl(drmLicenseUrl, channelId: effectiveChannelId),
             },
             isHls: !isDASH,
             licenseUrl: drmLicenseUrl.isNotEmpty ? drmLicenseUrl : null,
           );
         } else {
-          throw Exception('No playable stream URL returned: ${response.body}');
+          throw Exception('No playable stream URL returned for this channel.');
         }
+      } else if (response.statusCode == 403) {
+        final bodyStr = response.body;
+        if (bodyStr.contains('No eligible plans') || bodyStr.contains('Forbidden')) {
+          throw Exception('Subscription required: Broadcaster requires an add-on plan on your Jio account.');
+        }
+        throw Exception('Broadcaster restricted: 403 Forbidden.');
+      } else if (response.statusCode == 404) {
+        throw Exception('Channel feed is currently offline or discontinued by broadcaster.');
       } else {
-        throw Exception('Playback API returned status ${response.statusCode}: ${response.body}');
+        throw Exception('Broadcaster error (${response.statusCode}). Please try another channel.');
       }
     } catch (e) {
-      throw Exception('Failed to connect to ${channel.channelName} stream: $e');
+      final cleanMsg = e.toString().replaceAll('Exception: ', '').trim();
+      throw Exception(cleanMsg);
     }
   }
 

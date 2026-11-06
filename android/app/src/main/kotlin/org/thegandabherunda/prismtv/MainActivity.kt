@@ -1,18 +1,23 @@
 package org.thegandabherunda.prismtv
 
+import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import kotlin.math.roundToInt
 
 class MainActivity : FlutterActivity() {
     private val UPDATE_CHANNEL = "org.thegandabherunda.prismtv/app_updater"
+    private val DEVICE_CONTROL_CHANNEL = "org.thegandabherunda.prismtv/device_control"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,6 +27,8 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // 1. App Updater Channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UPDATE_CHANNEL).setMethodCallHandler { call, result ->
             if (call.method == "installApk") {
                 val filePath = call.argument<String>("filePath")
@@ -54,6 +61,64 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+
+        // 2. Hardware Device Controls (Brightness & Volume with 0ms OS overhead)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_CONTROL_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "getBrightness" -> {
+                    try {
+                        val lp = window.attributes
+                        val b = if (lp.screenBrightness >= 0f) {
+                            lp.screenBrightness
+                        } else {
+                            try {
+                                Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS) / 255.0f
+                            } catch (_: Exception) {
+                                0.5f
+                            }
+                        }
+                        result.success(b.toDouble())
+                    } catch (e: Exception) {
+                        result.error("BRIGHTNESS_ERROR", e.localizedMessage, null)
+                    }
+                }
+                "setBrightness" -> {
+                    try {
+                        val level = call.argument<Double>("brightness") ?: 0.5
+                        val lp = window.attributes
+                        lp.screenBrightness = level.toFloat().coerceIn(0.01f, 1.0f)
+                        window.attributes = lp
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("BRIGHTNESS_ERROR", e.localizedMessage, null)
+                    }
+                }
+                "getVolume" -> {
+                    try {
+                        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                        val cur = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                        val v = if (max > 0) cur.toDouble() / max.toDouble() else 0.5
+                        result.success(v)
+                    } catch (e: Exception) {
+                        result.error("VOLUME_ERROR", e.localizedMessage, null)
+                    }
+                }
+                "setVolume" -> {
+                    try {
+                        val level = call.argument<Double>("volume") ?: 0.5
+                        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                        val target = (level * max).roundToInt().coerceIn(0, max)
+                        // Flag 0 suppresses the OS system volume dialog to allow custom HUD indicator
+                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("VOLUME_ERROR", e.localizedMessage, null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 }
-

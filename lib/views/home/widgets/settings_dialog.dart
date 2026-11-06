@@ -118,29 +118,33 @@ class _SettingsDialogState extends State<SettingsDialog> {
             ),
           ),
           const SizedBox(width: 12),
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Settings & Preferences',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  letterSpacing: -0.2,
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Settings & Preferences',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    letterSpacing: -0.2,
+                  ),
                 ),
-              ),
-              SizedBox(height: 2),
-              Text(
-                'Filters, streaming quality, server endpoint & remote controls guide',
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: AppColors.textSecondary,
+                SizedBox(height: 2),
+                Text(
+                  'Filters, streaming quality, server endpoint & remote controls guide',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           Focus(
             child: Builder(
               builder: (ctx) {

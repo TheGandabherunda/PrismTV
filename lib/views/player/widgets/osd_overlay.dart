@@ -274,23 +274,25 @@ class OsdOverlay extends StatelessWidget {
                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                     children: [
                                       // Left: Play/Pause and LIVE pill
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Obx(() => _PillButton(
-                                                onTap: controller.togglePlayPause,
-                                                tooltip: controller.isPlaying.value ? 'Pause' : 'Play',
-                                                child: Icon(
-                                                  controller.isPlaying.value
-                                                      ? Icons.pause_rounded
-                                                      : Icons.play_arrow_rounded,
-                                                  color: Colors.white,
-                                                  size: 24,
-                                                ),
-                                              )),
-                                          const SizedBox(width: 8),
-                                          _LiveTimePill(controller: controller),
-                                        ],
+                                      Flexible(
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Obx(() => _PillButton(
+                                                  onTap: controller.togglePlayPause,
+                                                  tooltip: controller.isPlaying.value ? 'Pause' : 'Play',
+                                                  child: Icon(
+                                                    controller.isPlaying.value
+                                                        ? Icons.pause_rounded
+                                                        : Icons.play_arrow_rounded,
+                                                    color: Colors.white,
+                                                    size: 24,
+                                                  ),
+                                                )),
+                                            const SizedBox(width: 8),
+                                            Flexible(child: _LiveTimePill(controller: controller)),
+                                          ],
+                                        ),
                                       ),
 
                                       // Center: Chevron Up (Opens Channel Tray)
@@ -608,8 +610,6 @@ class _RightCapsule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isCompact = MediaQuery.of(context).size.width < 500;
-
     return Container(
       height: 40,
       padding: const EdgeInsets.all(4),
@@ -632,15 +632,13 @@ class _RightCapsule extends StatelessWidget {
             tooltip: 'Settings / Quality',
             isActive: controller.showQualityMenu.value,
           )),
-          if (!isCompact) ...[
-            const SizedBox(width: 4),
-            _CapsuleIconBtn(
-              icon: Icons.picture_in_picture_alt_rounded,
-              size: 19,
-              onTap: controller.minimizePlayer,
-              tooltip: 'Miniplayer (Minimize)',
-            ),
-          ],
+          const SizedBox(width: 4),
+          _CapsuleIconBtn(
+            icon: Icons.picture_in_picture_alt_rounded,
+            size: 19,
+            onTap: controller.minimizePlayer,
+            tooltip: 'Miniplayer (Minimize)',
+          ),
           const SizedBox(width: 4),
           Obx(() => _CapsuleIconBtn(
             icon: controller.isFullscreen.value
@@ -1007,20 +1005,30 @@ class _YouTubeSettingsMenu extends StatelessWidget {
         Divider(color: Colors.white.withValues(alpha: 0.08), height: 1),
         const SizedBox(height: 4),
 
-        // Resolutions List
-        ...options.map((opt) {
-          final isSelected = (opt.id == 'auto' && controller.selectedQualityOption.value.id == 'auto') ||
-              (opt.targetHeight > 0 && opt.targetHeight == controller.selectedQualityOption.value.targetHeight) ||
-              (opt.id == controller.selectedQualityOption.value.id) ||
-              opt.isActive;
+        // Resolutions List (Scrollable if height exceeds available space)
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 240),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: options.map((opt) {
+                final isSelected = (opt.id == 'auto' && controller.selectedQualityOption.value.id == 'auto') ||
+                    (opt.targetHeight > 0 && opt.targetHeight == controller.selectedQualityOption.value.targetHeight) ||
+                    (opt.id == controller.selectedQualityOption.value.id) ||
+                    opt.isActive;
 
-          return _SettingsOptionTile(
-            title: _cleanLabel(opt),
-            badge: opt.badge.isNotEmpty ? opt.badge : (opt.targetHeight >= 720 ? 'HD' : null),
-            isSelected: isSelected,
-            onTap: () => controller.changeQuality(opt),
-          );
-        }),
+                return _SettingsOptionTile(
+                  title: _cleanLabel(opt),
+                  badge: opt.badge.isNotEmpty ? opt.badge : (opt.targetHeight >= 720 ? 'HD' : null),
+                  isSelected: isSelected,
+                  onTap: () => controller.changeQuality(opt),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
       ],
     );
   }

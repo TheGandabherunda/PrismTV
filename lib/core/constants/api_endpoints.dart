@@ -34,9 +34,9 @@ class ApiEndpoints {
     return '/api/proxy/apis/v2.0/loginotp/refresh?langId=6';
   }
 
-  // Catalog & Channels (Public CDN with open access)
+  // Catalog & Channels (Public CDN with open access - 1100+ Channels)
   static const String channelListUrl =
-      'https://jiotv.data.cdn.jio.com/apis/v3.1/getMobileChannelList/get/?os=android&devicetype=phone&usertype=tvYR7NSNn7rymo3F';
+      'https://jiotv.data.cdn.jio.com/apis/v1.4/getMobileChannelList/get/?langId=6&os=android&devicetype=phone';
   static const String channelLogoBaseUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/';
 
   // EPG (Electronic Program Guide)
@@ -50,5 +50,5 @@ class ApiEndpoints {
   static const String appKey = 'NzNiMDhlYzQyNjJm';
   static const String appName = 'RJIL_JioTV';
   static const String defaultUserAgent =
-      'plaYtv/7.0.8 (Linux;Android 11) ExoPlayerLib/2.11.7';
+      'okhttp/4.12.0';
 }

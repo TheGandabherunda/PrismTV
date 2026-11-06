@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../core/services/ambient_color_service.dart';
 import '../../core/storage/hive_service.dart';
@@ -37,6 +39,7 @@ class HomeController extends GetxController {
       <MapEntry<CategoryModel, List<ChannelModel>>>[].obs;
 
   final TextEditingController searchController = TextEditingController();
+  final FocusNode searchFocusNode = FocusNode();
   final RxString searchQuery = ''.obs;
   final RxBool isMobileSearchOpen = false.obs;
 
@@ -61,6 +64,10 @@ class HomeController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    if (!kIsWeb) {
+      SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
     selectedLanguage.value = languages.first; // Defaults to All Languages
     selectedCategory.value = categories.first; // Defaults to All Channels
     defaultQuality.value = HiveService.getPreferredQualityOption();
@@ -76,6 +83,7 @@ class HomeController extends GetxController {
   @override
   void onClose() {
     _unfocusTimer?.cancel();
+    searchFocusNode.dispose();
     searchController.dispose();
     super.onClose();
   }
@@ -245,17 +253,37 @@ class HomeController extends GetxController {
       }
     }
 
-    // 1. Filter all channels by language and search query
-    final channelsMatchingLangAndSearch = allChannels.where((c) {
-      final matchesLang = isAllLangs || selectedJioLangIds.contains(c.languageId);
-      if (!matchesLang) return false;
+    // 1. Filter channels: when searching, search universally across all channels
+    final tokens = query.isEmpty
+        ? <String>[]
+        : query.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
 
-      if (query.isEmpty) return true;
-      final nameMatches = c.channelName.toLowerCase().contains(query);
-      final idMatches = c.channelId.toString().contains(query);
-      final langMatches = c.languageName.toLowerCase().contains(query);
-      final catMatches = c.categoryName.toLowerCase().contains(query);
-      return nameMatches || idMatches || langMatches || catMatches;
+    final channelsMatchingLangAndSearch = allChannels.where((c) {
+      // If no search query, respect the language filter; when user searches, search globally across all languages
+      if (query.isEmpty) {
+        final matchesLang = isAllLangs || selectedJioLangIds.contains(c.languageId);
+        if (!matchesLang) return false;
+        return true;
+      }
+
+      // Universal token-based search with "live" <-> "liv" alias and Sony sports recognition
+      return tokens.every((token) {
+        final t = token.toLowerCase();
+        final tAlt = t == 'live' ? 'liv' : (t == 'liv' ? 'live' : t);
+        final name = c.channelName.toLowerCase();
+        final cat = c.categoryName.toLowerCase();
+        final lang = c.languageName.toLowerCase();
+        final id = c.channelId.toString();
+
+        final isLivSearch = (t == 'liv' || t == 'live');
+        final matchesLivContext = isLivSearch &&
+            (name.contains('sony') || cat.contains('sports') || name.contains('sports') || name.contains('ten'));
+
+        return name.contains(t) || name.contains(tAlt) ||
+               cat.contains(t) || cat.contains(tAlt) ||
+               lang.contains(t) || id == t ||
+               matchesLivContext;
+      });
     }).toList();
 
     // 2. Build categorizedSections for category-wise splitting

@@ -1,4 +1,3 @@
-import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -57,26 +56,11 @@ class _ChannelCardState extends State<ChannelCard> {
       return;
     }
 
-    // 2. Immediate synchronous seed color from category & channel name
+    // 2. Immediate synchronous seed color from category & channel name (zero network jank)
     _extractedColor = AmbientPalette.getSeedPalette(
       widget.channel.channelName,
       widget.channel.categoryName,
     ).primaryAccent;
-
-    // 3. Asynchronously extract true vibrant colors from channel logo
-    if (widget.channel.logoUrl.isNotEmpty) {
-      AmbientColorService.extractPalette(
-        widget.channel.fullLogoUrl,
-        categoryName: widget.channel.categoryName,
-        channelName: widget.channel.channelName,
-      ).then((palette) {
-        if (mounted && palette.primaryAccent != _extractedColor) {
-          setState(() {
-            _extractedColor = palette.primaryAccent;
-          });
-        }
-      });
-    }
   }
 
   @override
@@ -213,6 +197,7 @@ class _ChannelCardState extends State<ChannelCard> {
                             ? CachedNetworkImage(
                                 imageUrl: widget.channel.fullLogoUrl,
                                 fit: BoxFit.contain,
+                                memCacheWidth: 200,
                                 placeholder: (_, _) => Center(
                                   child: ShimmerBox(
                                     width: isCompact ? 60 : 84,
@@ -228,134 +213,139 @@ class _ChannelCardState extends State<ChannelCard> {
 
                     // 3. Top Bar (Playing Pill / HD Badge on Left, Favorite Star on Right)
                     Positioned(
-                      top: 10,
-                      left: 12,
-                      right: 10,
+                      top: isCompact ? 6 : 10,
+                      left: isCompact ? 6 : 12,
+                      right: isCompact ? 6 : 10,
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (widget.isActive)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                                  margin: const EdgeInsets.only(right: 6),
-                                  decoration: BoxDecoration(
-                                    gradient: AppColors.prismGradient,
-                                    borderRadius: BorderRadius.circular(4),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.primary.withValues(alpha: 0.5),
-                                        blurRadius: 6,
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.play_arrow_rounded, size: 10, color: Colors.white),
-                                      SizedBox(width: 2),
-                                      Text(
-                                        'PLAYING',
-                                        style: TextStyle(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: 0.5,
-                                          color: Colors.white,
+                          Flexible(
+                            child: widget.isActive
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      gradient: AppColors.prismGradient,
+                                      borderRadius: BorderRadius.circular(4),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppColors.primary.withValues(alpha: 0.5),
+                                          blurRadius: 6,
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              if (widget.channel.isHd)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withValues(alpha: 0.45),
-                                    borderRadius: BorderRadius.circular(4),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(alpha: 0.14),
-                                      width: 0.8,
+                                      ],
                                     ),
-                                  ),
-                                  child: const Text(
-                                    'HD',
-                                    style: TextStyle(
-                                      fontSize: 9.5,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.5,
-                                      color: Colors.white,
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.play_arrow_rounded, size: 9, color: Colors.white),
+                                        SizedBox(width: 2),
+                                        Flexible(
+                                          child: Text(
+                                            'PLAYING',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 8.5,
+                                              fontWeight: FontWeight.w800,
+                                              letterSpacing: 0.5,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ),
-                                ),
-                            ],
+                                  )
+                                : (widget.channel.isHd
+                                    ? Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(alpha: 0.45),
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(
+                                            color: Colors.white.withValues(alpha: 0.14),
+                                            width: 0.8,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'HD',
+                                          style: TextStyle(
+                                            fontSize: 9.0,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: 0.5,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      )
+                                    : const SizedBox.shrink()),
                           ),
 
-                          // Favorite Star
-                          GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: widget.onFavoriteToggle,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                color: widget.channel.isFavorite
-                                    ? const Color(0x40FFB800)
-                                    : (highlighted ? const Color(0x30FFFFFF) : Colors.transparent),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                widget.channel.isFavorite
-                                    ? Icons.star_rounded
-                                    : Icons.star_border_rounded,
-                                size: 17,
-                                color: widget.channel.isFavorite
-                                    ? AppColors.gold
-                                    : (highlighted ? Colors.white : Colors.transparent),
+                          // Favorite Star Button (Always touchable on mobile & TV)
+                          if (widget.onFavoriteToggle != null)
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: widget.onFavoriteToggle,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                padding: const EdgeInsets.all(5),
+                                decoration: BoxDecoration(
+                                  color: widget.channel.isFavorite
+                                      ? const Color(0x55FFB800)
+                                      : Colors.black.withValues(alpha: 0.42),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: widget.channel.isFavorite
+                                        ? AppColors.gold.withValues(alpha: 0.80)
+                                        : Colors.white.withValues(alpha: 0.20),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Icon(
+                                  widget.channel.isFavorite
+                                      ? Icons.star_rounded
+                                      : Icons.star_border_rounded,
+                                  size: 16,
+                                  color: widget.channel.isFavorite
+                                      ? AppColors.gold
+                                      : Colors.white.withValues(alpha: 0.75),
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ),
 
-                    // 4. Frosted Glass Bottom Bar with Optical Backdrop Blur & Dark Fade Upwards
+                    // 4. Frosted Glass Bottom Bar with Dark Fade Upwards
                     Positioned(
                       bottom: 0,
                       left: 0,
                       right: 0,
-                      child: ClipRRect(
-                        borderRadius: const BorderRadius.only(
-                          bottomLeft: Radius.circular(12),
-                          bottomRight: Radius.circular(12),
-                        ),
-                        child: BackdropFilter(
-                          filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-                          child: Container(
-                            padding: isCompact
-                                ? const EdgeInsets.fromLTRB(10, 14, 10, 10)
-                                : const EdgeInsets.fromLTRB(14, 20, 14, 14),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                begin: Alignment.bottomCenter,
-                                end: Alignment.topCenter,
-                                colors: [
-                                  Color(0xF808090E),
-                                  Color(0xE808090E),
-                                  Color(0x7308090E),
-                                  Colors.transparent,
-                                ],
-                                stops: [0.0, 0.45, 0.82, 1.0],
-                              ),
-                              border: Border(
-                                top: BorderSide(
-                                  color: Colors.white.withValues(alpha: highlighted ? 0.12 : 0.04),
-                                  width: 0.5,
-                                ),
-                              ),
+                      child: Container(
+                        padding: isCompact
+                            ? const EdgeInsets.fromLTRB(10, 14, 10, 10)
+                            : const EdgeInsets.fromLTRB(14, 20, 14, 14),
+                        decoration: BoxDecoration(
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(12),
+                            bottomRight: Radius.circular(12),
+                          ),
+                          gradient: const LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Color(0xF808090E),
+                              Color(0xE808090E),
+                              Color(0x7308090E),
+                              Colors.transparent,
+                            ],
+                            stops: [0.0, 0.45, 0.82, 1.0],
+                          ),
+                          border: Border(
+                            top: BorderSide(
+                              color: Colors.white.withValues(alpha: highlighted ? 0.12 : 0.04),
+                              width: 0.5,
                             ),
-                            child: Column(
+                          ),
+                        ),
+                        child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -384,16 +374,14 @@ class _ChannelCardState extends State<ChannelCard> {
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
-    );
+        );
       },
     );
   }

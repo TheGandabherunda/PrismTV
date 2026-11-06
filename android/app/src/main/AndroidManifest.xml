@@ -14,6 +14,18 @@
     <!-- In-App Self-Update Package Installation -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 
+    <!-- URL Launcher Queries for Browser and External App Opening -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
+        </intent>
+    </queries>
+
     <!-- Ensure compatibility across all devices: Android TV, Google TV, Fire TV, tablets, phones -->
     <uses-feature
         android:name="android.software.leanback"

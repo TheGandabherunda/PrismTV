@@ -14,7 +14,8 @@ import '../../data/models/quality_option.dart';
 import '../../data/repositories/channel_repository.dart';
 import '../../routes/app_routes.dart';
 import '../home/home_controller.dart';
-import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/material.dart' show Icons, DragStartDetails, DragUpdateDetails, DragEndDetails;
+import '../../core/services/device_control_service.dart';
 import 'widgets/audio_language_dialog.dart';
 
 class PlayerController extends GetxController {
@@ -51,6 +52,15 @@ class PlayerController extends GetxController {
   final RxBool isMuted = false.obs;
   double _previousVolume = 1.0;
 
+  // Gesture HUD Indicators (Swipe up/down for Brightness on left, Volume on right)
+  final RxBool showBrightnessHud = false.obs;
+  final RxBool showVolumeHud = false.obs;
+  final RxDouble hudBrightness = 0.5.obs;
+  final RxDouble hudVolume = 0.5.obs;
+  Timer? _hudFadeTimer;
+  bool _isDraggingBrightness = false;
+  bool _isDraggingVolume = false;
+
   // Seeking, Timeline & Live Delay
   final RxBool isLiveStream = true.obs;
   final Rx<Duration> currentPosition = Duration.zero.obs;
@@ -74,6 +84,8 @@ class PlayerController extends GetxController {
 
   DateTime _lastLiveSyncTime = DateTime.fromMillisecondsSinceEpoch(0);
   int _consecutiveBufferTicks = 0;
+  int _autoRecoveryAttempts = 0;
+  DateTime? _lastAutoRecoveryTime;
 
   @override
   void onInit() {
@@ -87,6 +99,10 @@ class PlayerController extends GetxController {
     selectedQuality.value = selectedQualityOption.value.id == 'auto'
         ? 'Auto'
         : '${selectedQualityOption.value.targetHeight}p';
+
+    // Synchronize initial device brightness & volume for HUD
+    DeviceControlService.getBrightness().then((b) => hudBrightness.value = b);
+    DeviceControlService.getVolume().then((v) => hudVolume.value = v);
 
     ChannelModel? targetChannel;
     if (args != null && args['channel'] is ChannelModel) {
@@ -129,15 +145,97 @@ class PlayerController extends GetxController {
 
   @override
   void onClose() {
+    _hudFadeTimer?.cancel();
     if (!isMinimized.value) {
       _osdTimer?.cancel();
       _toastTimer?.cancel();
       videoPlayerController?.dispose();
     }
+    if (!kIsWeb) {
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
     super.onClose();
   }
 
+  // ---------------------------------------------------------------------------
+  // Touch Gestures: Brightness (Left Swipe) & Volume (Right Swipe)
+  // ---------------------------------------------------------------------------
+  void handleVerticalDragStart(DragStartDetails details, BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isLeft = details.globalPosition.dx < (size.width / 2);
+
+    _isDraggingBrightness = isLeft;
+    _isDraggingVolume = !isLeft;
+    _hudFadeTimer?.cancel();
+
+    if (_isDraggingBrightness) {
+      DeviceControlService.getBrightness().then((b) {
+        hudBrightness.value = b;
+      });
+      showBrightnessHud.value = true;
+      showVolumeHud.value = false;
+    } else {
+      DeviceControlService.getVolume().then((v) {
+        hudVolume.value = v;
+      });
+      showVolumeHud.value = true;
+      showBrightnessHud.value = false;
+    }
+  }
+
+  void handleVerticalDragUpdate(DragUpdateDetails details, BuildContext context) {
+    final height = MediaQuery.of(context).size.height;
+    if (height <= 0) return;
+
+    final delta = -(details.primaryDelta ?? 0.0) / (height * 0.70);
+
+    if (_isDraggingBrightness) {
+      final newB = (hudBrightness.value + delta).clamp(0.01, 1.0);
+      hudBrightness.value = newB;
+      DeviceControlService.setBrightness(newB);
+      showBrightnessHud.value = true;
+    } else if (_isDraggingVolume) {
+      final newV = (hudVolume.value + delta).clamp(0.0, 1.0);
+      hudVolume.value = newV;
+      DeviceControlService.setVolume(newV);
+      videoPlayerController?.setVolume(newV);
+      volume.value = newV;
+      isMuted.value = (newV == 0.0);
+      showVolumeHud.value = true;
+    }
+  }
+
+  void handleVerticalDragEnd(DragEndDetails details) {
+    _isDraggingBrightness = false;
+    _isDraggingVolume = false;
+    _startHudFadeTimer();
+  }
+
+  void handleVerticalDragCancel() {
+    _isDraggingBrightness = false;
+    _isDraggingVolume = false;
+    _startHudFadeTimer();
+  }
+
+  void _startHudFadeTimer() {
+    _hudFadeTimer?.cancel();
+    _hudFadeTimer = Timer(const Duration(milliseconds: 1200), () {
+      showBrightnessHud.value = false;
+      showVolumeHud.value = false;
+    });
+  }
+
   void minimizePlayer() {
+    if (!kIsWeb) {
+      isFullscreen.value = false;
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
     isMinimized.value = true;
     showOsd.value = false;
     showQualityMenu.value = false;
@@ -195,6 +293,12 @@ class PlayerController extends GetxController {
     _showToast('Speed: ${speed == 1.0 ? "Normal" : "${speed}x"}');
   }
 
+  void retryCurrentChannel() {
+    streamError.value = '';
+    _autoRecoveryAttempts = 0;
+    _initializeChannel(currentChannel);
+  }
+
   Future<void> _initializeChannel(ChannelModel channel) async {
     currentChannel = channel;
     HiveService.saveLastPlayedChannel(channel);
@@ -246,8 +350,11 @@ class PlayerController extends GetxController {
       });
     } catch (e) {
       debugPrint('[PRISM_PLAYER_ERROR] $e');
-      if (e.toString().contains('Authentication') || e.toString().contains('419') || e.toString().contains('401')) {
+      final clean = e.toString().replaceAll('Exception: ', '').trim();
+      if (clean.contains('Authentication') || clean.contains('419') || clean.contains('401')) {
         streamError.value = 'Session expired. Please log in again from Profile.';
+      } else if (clean.isNotEmpty) {
+        streamError.value = clean;
       } else {
         streamError.value = 'Unable to establish stream connection. Retrying...';
       }
@@ -390,8 +497,38 @@ class PlayerController extends GetxController {
 
   void _videoListener() {
     if (videoPlayerController == null) return;
+
+    if (videoPlayerController!.value.hasError) {
+      final err = videoPlayerController!.value.errorDescription ?? 'Playback error';
+      debugPrint('[PRISM_PLAYER_LISTENER_ERROR] $err');
+
+      // Attempt automatic silent recovery up to 3 times before displaying the error modal
+      final now = DateTime.now();
+      if (_autoRecoveryAttempts < 3 &&
+          (_lastAutoRecoveryTime == null || now.difference(_lastAutoRecoveryTime!).inSeconds > 3)) {
+        _autoRecoveryAttempts++;
+        _lastAutoRecoveryTime = now;
+        debugPrint('[PRISM_PLAYER] Auto-recovering interrupted stream (attempt $_autoRecoveryAttempts/3)...');
+        isBuffering.value = true;
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _initializeChannel(currentChannel);
+        });
+        return;
+      }
+
+      if (streamError.value.isEmpty) {
+        streamError.value = 'Playback interrupted. Please select another channel.';
+      }
+      isBuffering.value = false;
+      return;
+    }
+
     isBuffering.value = videoPlayerController!.value.isBuffering;
     isPlaying.value = videoPlayerController!.value.isPlaying;
+
+    if (isPlaying.value && !isBuffering.value) {
+      _autoRecoveryAttempts = 0;
+    }
 
     final pos = videoPlayerController!.value.position;
     final dur = videoPlayerController!.value.duration;
@@ -438,10 +575,9 @@ class PlayerController extends GetxController {
   }
 
   void onUserInteraction() {
-    if (!showOsd.value) {
-      showOsd.value = true;
+    if (showOsd.value) {
+      _resetOsdTimer();
     }
-    _resetOsdTimer();
   }
 
   void seekToPosition(Duration pos) {
@@ -520,12 +656,31 @@ class PlayerController extends GetxController {
     _resetOsdTimer();
   }
 
-  void toggleFullscreen() {
-    try {
-      toggleWebFullscreen();
-      isFullscreen.value = !isFullscreen.value;
-    } catch (_) {
-      isFullscreen.value = !isFullscreen.value;
+  Future<void> toggleFullscreen() async {
+    isFullscreen.value = !isFullscreen.value;
+    if (kIsWeb) {
+      try {
+        toggleWebFullscreen();
+      } catch (_) {}
+    } else {
+      try {
+        if (isFullscreen.value) {
+          // Rotate to Landscape Fullscreen
+          await SystemChrome.setPreferredOrientations([
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ]);
+          await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        } else {
+          // Restore to Portrait
+          await SystemChrome.setPreferredOrientations([
+            DeviceOrientation.portraitUp,
+          ]);
+          await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        }
+      } catch (e) {
+        debugPrint('[FULLSCREEN_ERR] $e');
+      }
     }
     _resetOsdTimer();
   }
@@ -564,6 +719,13 @@ class PlayerController extends GetxController {
     if (showBottomChannelTray.value) {
       closeBottomChannelTray();
       return;
+    }
+    if (!kIsWeb) {
+      isFullscreen.value = false;
+      SystemChrome.setPreferredOrientations([
+        DeviceOrientation.portraitUp,
+      ]);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     }
     // Clicking back closes the player completely (does not minimize)
     isMinimized.value = false;
@@ -656,6 +818,21 @@ class PlayerController extends GetxController {
     return null;
   }
 
+  Future<void> toggleFavorite(ChannelModel channel) async {
+    await _channelRepo.toggleFavorite(channel);
+    channel.isFavorite = !channel.isFavorite;
+    if (currentChannel.channelId == channel.channelId) {
+      currentChannel.isFavorite = channel.isFavorite;
+    }
+    _showToast(channel.isFavorite
+        ? 'Added to Favorites ⭐'
+        : 'Removed from Favorites');
+    update();
+    if (Get.isRegistered<HomeController>()) {
+      Get.find<HomeController>().allChannels.refresh();
+    }
+  }
+
   // ==========================================
   // TV Remote & Keyboard Actions
   // ==========================================
@@ -692,7 +869,17 @@ class PlayerController extends GetxController {
     _resetOsdTimer();
   }
 
+  DateTime _lastSurfaceTapTime = DateTime.fromMillisecondsSinceEpoch(0);
+
   void handleSurfaceTap() {
+    debugPrint('[PRISM_TAP] handleSurfaceTap called, current showOsd=${showOsd.value}');
+    final now = DateTime.now();
+    if (now.difference(_lastSurfaceTapTime).inMilliseconds < 300) {
+      debugPrint('[PRISM_TAP] Debounced rapid tap');
+      return;
+    }
+    _lastSurfaceTapTime = now;
+
     if (showQualityMenu.value) {
       closeQualityMenu();
       return;
@@ -705,8 +892,13 @@ class PlayerController extends GetxController {
   }
 
   void toggleOsd() {
-    showOsd.value = !showOsd.value;
     if (showOsd.value) {
+      debugPrint('[PRISM_TAP] Closing OSD');
+      showOsd.value = false;
+      _osdTimer?.cancel();
+    } else {
+      debugPrint('[PRISM_TAP] Opening OSD');
+      showOsd.value = true;
       _resetOsdTimer();
     }
   }

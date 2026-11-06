@@ -1,37 +1,36 @@
-name: Multi-Platform Release Build (Android, macOS, Web, webOS)
+name: Multi-Platform Release Build (Android, LG webOS, macOS, Web)
 
 on:
-  workflow_dispatch:
-    inputs:
-      branch:
-        description: 'Branch to build from'
-        required: true
-        default: 'main'
-      create_release:
-        description: 'Create a GitHub Release draft/entry'
-        type: boolean
-        required: false
-        default: true
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (leave blank to auto-detect from pubspec.yaml)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-pipeline
+  cancel-in-progress: false
 
 jobs:
   # ==========================================
   # 1. ANDROID SPLIT & UNIVERSAL APKS
   # ==========================================
   build_android:
-    name: Build Android APK Splits
+    name: Build Android APK Splits & Universal
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
 
       - name: Setup Java 17
         uses: actions/setup-java@v4
@@ -45,13 +44,10 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Display Flutter Version
-        run: flutter --version
-
       - name: Install Dependencies
         run: flutter pub get
 
-      # Keystore & Signing Configuration (Matches OpenJot & local keys)
+      # Keystore & Signing Configuration
       - name: Configure Keystore & Signing
         run: |
           if [ -n "${{ secrets.ANDROID_UPLOAD_KEYSTORE }}" ]; then
@@ -66,32 +62,20 @@ jobs:
           EOF
             echo "Release key configuration created successfully."
           else
-            echo "ANDROID_UPLOAD_KEYSTORE secret not set. Build will use debug signature if release key missing."
+            echo "ANDROID_UPLOAD_KEYSTORE secret not set. Build will use debug signature fallback."
           fi
 
-      - name: Build Android APK Splits & Universal
-        run: |
-          # Split APKs for Android TV, Fire TV, and Mobile architectures
-          flutter build apk --release --split-per-abi
-          # Universal APK compatible with all architectures
-          flutter build apk --release
-
-      - name: Inspect APKs with AAPT
-        run: |
-          AaptPath=$(ls ${ANDROID_HOME}/build-tools/*/aapt | sort -V | tail -n 1)
-          echo "Using aapt from: $AaptPath"
-          for apk in build/app/outputs/flutter-apk/*.apk; do
-            echo "----------------------------------------"
-            echo "APK: $apk"
-            $AaptPath dump badging "$apk" | grep -E "package|versionCode|versionName" || true
-          done
-
-      - name: Prepare Android Artifacts
+      - name: Build Android APK Splits (arm64, armv7, x86_64)
         run: |
           mkdir -p artifacts/android
+          flutter build apk --release --split-per-abi
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk artifacts/android/PrismTV-arm64-v8a.apk 2>/dev/null || true
           cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk artifacts/android/PrismTV-armeabi-v7a.apk 2>/dev/null || true
           cp build/app/outputs/flutter-apk/app-x86_64-release.apk artifacts/android/PrismTV-x86_64.apk 2>/dev/null || true
+
+      - name: Build Android Universal APK
+        run: |
+          flutter build apk --release
           cp build/app/outputs/flutter-apk/app-release.apk artifacts/android/PrismTV-universal.apk 2>/dev/null || true
           ls -la artifacts/android
 
@@ -112,8 +96,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -143,7 +125,7 @@ jobs:
           mkdir -p artifacts/webos
           if [ -f "dist/PrismTV-webOS.ipk" ]; then
             cp dist/PrismTV-webOS.ipk artifacts/webos/PrismTV-webOS.ipk
-          else
+          elif ls dist/*.ipk 1> /dev/null 2>&1; then
             cp dist/*.ipk artifacts/webos/PrismTV-webOS.ipk
           fi
           ls -la artifacts/webos
@@ -153,6 +135,7 @@ jobs:
         with:
           name: PrismTV-LG-webOS-ipk
           path: artifacts/webos/
+          if-no-files-found: ignore
           retention-days: 14
 
   # ==========================================
@@ -161,12 +144,11 @@ jobs:
   build_macos:
     name: Build macOS Application
     runs-on: macos-latest
+    continue-on-error: true
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -177,15 +159,20 @@ jobs:
       - name: Install Flutter Dependencies
         run: flutter pub get
 
-      - name: Build macOS Release App
-        run: flutter build macos --release
+      - name: Build macOS Release App (No Code Sign for CI)
+        run: flutter build macos --release --no-codesign
 
       - name: Package macOS App Bundle
         run: |
           mkdir -p artifacts/macos
-          cd build/macos/Build/Products/Release
-          zip -r -y ../../../../artifacts/macos/PrismTV-macOS.zip prism_tv.app
-          cd ../../../..
+          APP_PATH=$(find build/macos/Build/Products/Release -maxdepth 1 -name "*.app" | head -n 1)
+          if [ -n "$APP_PATH" ] && [ -d "$APP_PATH" ]; then
+            APP_NAME=$(basename "$APP_PATH")
+            echo "Packaging macOS App: $APP_NAME into PrismTV-macOS.zip"
+            (cd build/macos/Build/Products/Release && zip -r -y "${GITHUB_WORKSPACE}/artifacts/macos/PrismTV-macOS.zip" "$APP_NAME")
+          elif [ -d "build/macos/Build/Products/Release/prism_tv.app" ]; then
+            (cd build/macos/Build/Products/Release && zip -r -y "${GITHUB_WORKSPACE}/artifacts/macos/PrismTV-macOS.zip" prism_tv.app)
+          fi
           ls -la artifacts/macos
 
       - name: Upload macOS Artifact
@@ -193,20 +180,72 @@ jobs:
         with:
           name: PrismTV-macOS
           path: artifacts/macos/
+          if-no-files-found: ignore
           retention-days: 14
 
   # ==========================================
-  # 4. PUBLISH GITHUB RELEASE
+  # 4. WEB & SMART TV BROWSER BUNDLE
   # ==========================================
-  publish_release:
-    name: Publish GitHub Release
-    needs: [build_android, build_webos, build_macos]
-    if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == 'true' || github.event.inputs.create_release == true
+  build_web:
+    name: Build Web & Smart TV Bundle
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: Build Web Application
+        run: flutter build web --release
+
+      - name: Package Web Distribution
+        run: |
+          mkdir -p artifacts/web
+          (cd build/web && zip -r "${GITHUB_WORKSPACE}/artifacts/web/PrismTV-Web.zip" .)
+          ls -la artifacts/web
+
+      - name: Upload Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrismTV-Web
+          path: artifacts/web/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ==========================================
+  # 5. AUTOMATED GITHUB RELEASE
+  # ==========================================
+  publish_release:
+    name: Publish GitHub Release
+    needs: [build_android, build_webos, build_macos, build_web]
+    if: !cancelled() && needs.build_android.result == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Determine Release Tag & Version
+        id: vars
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${{ github.ref_name }}"
+          else
+            PUBSPEC_VER=$(grep '^version:' pubspec.yaml | sed 's/version: //' | tr -d ' \r' | cut -d'+' -f1)
+            TAG="v${PUBSPEC_VER}"
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Selected release tag: ${TAG}"
 
       - name: Download Android Artifacts
         uses: actions/download-artifact@v4
@@ -216,14 +255,23 @@ jobs:
 
       - name: Download webOS Artifact
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: PrismTV-LG-webOS-ipk
           path: release-files
 
       - name: Download macOS Artifact
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: PrismTV-macOS
+          path: release-files
+
+      - name: Download Web Artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: PrismTV-Web
           path: release-files
 
       - name: List Release Files
@@ -232,9 +280,27 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: PrismTV ${{ github.ref_name }}
+          tag_name: ${{ steps.vars.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: PrismTV ${{ steps.vars.outputs.tag }}
+          body: |
+            ### 📺 PrismTV ${{ steps.vars.outputs.tag }}
+
+            Universal Smart TV, Mobile, and Desktop broadcast streaming suite for Kannada & Indian regional television.
+
+            #### 📦 Distribution Packages:
+            - **Android TV / Fire TV / Mobile (64-bit arm64-v8a)**: `PrismTV-arm64-v8a.apk`
+            - **Legacy Android / Fire TV Stick 2nd/3rd Gen (32-bit armeabi-v7a)**: `PrismTV-armeabi-v7a.apk`
+            - **Android Emulators / x86_64 Devices**: `PrismTV-x86_64.apk`
+            - **Universal Android (All architectures)**: `PrismTV-universal.apk`
+            - **LG webOS Smart TVs**: `PrismTV-webOS.ipk`
+            - **Smart TV Web Bundle**: `PrismTV-Web.zip`
+            - **Apple macOS Desktop**: `PrismTV-macOS.zip`
           files: release-files/*
           draft: false
           prerelease: false
           generate_release_notes: true
+          make_latest: true
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

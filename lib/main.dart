@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'core/constants/app_colors.dart';
 import 'core/services/app_update_service.dart';
+import 'core/services/local_stream_proxy.dart';
 import 'core/storage/hive_service.dart';
 import 'data/providers/jio_live_source.dart';
 import 'data/repositories/auth_repository.dart';
@@ -19,11 +20,19 @@ void main() async {
     return const SizedBox.shrink();
   };
 
+  // Lock mobile app to portrait by default (fullscreen player dynamically unlocks landscape)
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
+
   // Smart TV Fullscreen / Leanback flags
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
   // Initialize Local Hive Persistence
   await HiveService.init();
+
+  // Initialize In-App Streaming Proxy for Native Android HLS
+  await LocalStreamProxy.ensureStarted();
 
   // Dependency Injection (GetX)
   final jioSource = JioLiveSource();
