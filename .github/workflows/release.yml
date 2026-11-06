@@ -226,7 +226,7 @@ jobs:
   publish_release:
     name: Publish GitHub Release
     needs: [build_android, build_webos, build_macos, build_web]
-    if: !cancelled() && needs.build_android.result == 'success'
+    if: ${{ !cancelled() && needs.build_android.result == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
