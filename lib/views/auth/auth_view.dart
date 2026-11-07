@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
@@ -11,6 +12,29 @@ class AuthView extends GetView<AuthController> {
 
   @override
   Widget build(BuildContext context) {
+    final digitMap = {
+      LogicalKeyboardKey.digit0: '0',
+      LogicalKeyboardKey.numpad0: '0',
+      LogicalKeyboardKey.digit1: '1',
+      LogicalKeyboardKey.numpad1: '1',
+      LogicalKeyboardKey.digit2: '2',
+      LogicalKeyboardKey.numpad2: '2',
+      LogicalKeyboardKey.digit3: '3',
+      LogicalKeyboardKey.numpad3: '3',
+      LogicalKeyboardKey.digit4: '4',
+      LogicalKeyboardKey.numpad4: '4',
+      LogicalKeyboardKey.digit5: '5',
+      LogicalKeyboardKey.numpad5: '5',
+      LogicalKeyboardKey.digit6: '6',
+      LogicalKeyboardKey.numpad6: '6',
+      LogicalKeyboardKey.digit7: '7',
+      LogicalKeyboardKey.numpad7: '7',
+      LogicalKeyboardKey.digit8: '8',
+      LogicalKeyboardKey.numpad8: '8',
+      LogicalKeyboardKey.digit9: '9',
+      LogicalKeyboardKey.numpad9: '9',
+    };
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
@@ -86,57 +110,78 @@ class AuthView extends GetView<AuthController> {
             ),
           ),
 
-          // 2. Main Auth Content Layout
-          Focus(
+          // 2. Main Auth Content Layout with TV Remote & Keyboard Handling
+          FocusScope(
             autofocus: true,
-            onKeyEvent: (node, event) {
-              controller.handleKeyEvent(event);
-              return KeyEventResult.ignored;
-            },
-            child: SafeArea(
-              child: Center(
-                child: Builder(
-                  builder: (context) {
-                    final isMobile = MediaQuery.of(context).size.width < 768;
+            child: Focus(
+              onKeyEvent: (node, event) {
+                if (event is KeyDownEvent) {
+                  final key = event.logicalKey;
+                  // Handle physical keyboard or remote hardware digits if typed directly
+                  if (digitMap.containsKey(key)) {
+                    controller.appendNumber(digitMap[key]!);
+                    return KeyEventResult.handled;
+                  }
+                  if (key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.delete) {
+                    controller.deleteNumber();
+                    return KeyEventResult.handled;
+                  }
+                }
+                // Let directional arrows traverse focus nodes smoothly!
+                return KeyEventResult.ignored;
+              },
+              child: SafeArea(
+                child: Center(
+                  child: Builder(
+                    builder: (context) {
+                      final size = MediaQuery.of(context).size;
+                      // Only handheld mobile phones in vertical portrait get single-column layout.
+                      // Fire TV Stick, Android TV, Google TV, Web, and Desktop get widescreen layout!
+                      final isMobile = size.width < 768 && size.width < size.height;
 
-                    return SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isMobile ? 16 : 40,
-                        vertical: isMobile ? 20 : 24,
-                      ),
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 820),
-                        child: isMobile
-                            ? Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  _buildMobileBrandHeader(),
-                                  const SizedBox(height: 24),
-                                  _buildRightFormCard(),
-                                ],
-                              )
-                            : Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  // Left Panel: Brand & Info
-                                  Expanded(
-                                    flex: 5,
-                                    child: _buildLeftBrandPanel(),
-                                  ),
+                      return SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 16 : 40,
+                          vertical: isMobile ? 20 : 28,
+                        ),
+                        child: Container(
+                          constraints: BoxConstraints(maxWidth: isMobile ? 420 : 920),
+                          child: isMobile
+                              ? Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    _buildMobileBrandHeader(),
+                                    const SizedBox(height: 24),
+                                    _buildRightFormCard(),
+                                  ],
+                                )
+                              : Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    // Left Panel: Brand & Info
+                                    Expanded(
+                                      flex: 5,
+                                      child: _buildLeftBrandPanel(),
+                                    ),
 
-                                  const SizedBox(width: 44),
+                                    const SizedBox(width: 48),
 
-                                  // Right Panel: Form Card with Compact Symmetric Number Pad
-                                  Center(
-                                    child: _buildRightFormCard(),
-                                  ),
-                                ],
-                              ),
-                      ),
-                    );
-                  },
+                                    // Right Panel: Form Card with TV Remote Keypad
+                                    Expanded(
+                                      flex: 5,
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: _buildRightFormCard(),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -180,49 +225,58 @@ class AuthView extends GetView<AuthController> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const PrismTriangleLogo(size: 60, hasGlow: true),
-        const SizedBox(height: 20),
+        const PrismTriangleLogo(size: 64, hasGlow: true),
+        const SizedBox(height: 22),
         const Text(
           'PrismTV',
           style: TextStyle(
-            fontSize: 40,
+            fontSize: 42,
             fontWeight: FontWeight.w900,
             letterSpacing: -0.5,
             color: Colors.white,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Text(
           'Smart TV Live Broadcast Platform',
           style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w500,
-            color: Colors.white.withValues(alpha: 0.65),
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.white.withValues(alpha: 0.75),
           ),
         ),
         const SizedBox(height: 20),
         Text(
           'Sign in with your Jio mobile number to access all live TV channels, regional broadcasts, and real-time electronic program guides.',
           style: TextStyle(
-            fontSize: 14,
+            fontSize: 14.5,
             height: 1.6,
             color: Colors.white.withValues(alpha: 0.60),
           ),
         ),
-        const SizedBox(height: 20),
-        Row(
-          children: const [
-            Icon(Icons.keyboard_rounded, size: 16, color: AppColors.primaryLight),
-            SizedBox(width: 8),
-            Text(
-              'Use TV remote keypad or physical keyboard',
-              style: TextStyle(
-                fontSize: 12.5,
-                color: AppColors.primaryLight,
-                fontWeight: FontWeight.w500,
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.gamepad_rounded, size: 18, color: AppColors.primaryLight),
+              SizedBox(width: 10),
+              Text(
+                'Navigate with Remote Arrows & Select button',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.primaryLight,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
@@ -234,17 +288,17 @@ class AuthView extends GetView<AuthController> {
       child: BackdropFilter(
         filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 348),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+          constraints: const BoxConstraints(maxWidth: 380),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           decoration: BoxDecoration(
             color: AppColors.surface.withValues(alpha: 0.90),
             borderRadius: BorderRadius.circular(AppDimens.radiusLarge),
             border: Border.all(color: AppColors.unfocusedBorder),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.40),
-                blurRadius: 28,
-                offset: const Offset(0, 10),
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 32,
+                offset: const Offset(0, 12),
               ),
             ],
           ),
@@ -266,20 +320,9 @@ class AuthView extends GetView<AuthController> {
                       ),
                     ),
                     if (controller.isOtpSent.value)
-                      InkWell(
+                      _FocusableTextButton(
+                        label: 'Change',
                         onTap: controller.changeNumber,
-                        borderRadius: BorderRadius.circular(6),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          child: Text(
-                            'Change',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primaryLight,
-                            ),
-                          ),
-                        ),
                       ),
                   ],
                 ),
@@ -333,8 +376,8 @@ class AuthView extends GetView<AuthController> {
                             padding: const EdgeInsets.all(4),
                             child: Icon(
                               Icons.close_rounded,
-                              size: 15,
-                              color: Colors.white.withValues(alpha: 0.5),
+                              size: 16,
+                              color: Colors.white.withValues(alpha: 0.6),
                             ),
                           ),
                         ),
@@ -344,77 +387,19 @@ class AuthView extends GetView<AuthController> {
 
                 const SizedBox(height: 14),
 
-                // Compact Symmetric TV Keypad with Material Tap Effect (0-9, Clear, Delete)
+                // D-Pad Remote Navigable Symmetric Keypad (1-9, Clear, 0, ⌫)
                 _buildTvKeypad(),
 
                 const SizedBox(height: 14),
 
-                // Action Button (Inactive until 10 digits entered, "Request OTP")
-                Focus(
-                  child: Builder(
-                    builder: (ctx) {
-                      final hasFocus = Focus.of(ctx).hasFocus;
-                      final isOtp = controller.isOtpSent.value;
-                      final canSubmit = isOtp
-                          ? controller.otpCode.value.length == 6
-                          : controller.phoneNumber.value.length == 10;
-
-                      return InkWell(
-                        onTap: (controller.isLoading.value || !canSubmit)
-                            ? null
-                            : (isOtp
-                                ? controller.verifyOtp
-                                : controller.sendOtp),
-                        borderRadius: BorderRadius.circular(10),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(vertical: 13),
-                          decoration: BoxDecoration(
-                            gradient: canSubmit ? AppColors.activeTabGradient : null,
-                            color: canSubmit ? null : Colors.white.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: hasFocus
-                                  ? Colors.white
-                                  : (canSubmit ? Colors.transparent : Colors.white.withValues(alpha: 0.08)),
-                              width: hasFocus ? 2 : 1,
-                            ),
-                            boxShadow: canSubmit
-                                ? [
-                                    BoxShadow(
-                                      color: hasFocus ? AppColors.primaryGlow : AppColors.secondaryGlow,
-                                      blurRadius: hasFocus ? 18 : 12,
-                                      spreadRadius: hasFocus ? 2 : 0,
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Center(
-                            child: controller.isLoading.value
-                                ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Text(
-                                    isOtp
-                                        ? 'Verify OTP'
-                                        : 'Request OTP',
-                                    style: TextStyle(
-                                      color: canSubmit ? Colors.white : Colors.white38,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0.6,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                // Action Button (Inactive until digits entered, "Request OTP" / "Verify OTP")
+                _TvActionButton(
+                  label: controller.isOtpSent.value ? 'Verify OTP' : 'Request OTP',
+                  isEnabled: controller.isOtpSent.value
+                      ? controller.otpCode.value.length == 6
+                      : controller.phoneNumber.value.length == 10,
+                  isLoading: controller.isLoading.value,
+                  onTap: controller.isOtpSent.value ? controller.verifyOtp : controller.sendOtp,
                 ),
 
                 // Resend Countdown Row (when in OTP step)
@@ -433,20 +418,9 @@ class AuthView extends GetView<AuthController> {
                         ),
                       ),
                       if (controller.resendCountdown.value == 0)
-                        InkWell(
+                        _FocusableTextButton(
+                          label: 'Resend Code',
                           onTap: controller.isLoading.value ? null : controller.sendOtp,
-                          borderRadius: BorderRadius.circular(6),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                            child: Text(
-                              'Resend Code',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primaryLight,
-                              ),
-                            ),
-                          ),
                         ),
                     ],
                   ),
@@ -460,6 +434,7 @@ class AuthView extends GetView<AuthController> {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
                       color: controller.isError.value ? AppColors.secondary : AppColors.primaryLight,
                     ),
                   ),
@@ -474,129 +449,347 @@ class AuthView extends GetView<AuthController> {
 
   Widget _buildTvKeypad() {
     return Column(
-      children: [
-        Row(
-          children: [
-            _keypadBtn('1'),
-            const SizedBox(width: 8),
-            _keypadBtn('2'),
-            const SizedBox(width: 8),
-            _keypadBtn('3'),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _keypadBtn('4'),
-            const SizedBox(width: 8),
-            _keypadBtn('5'),
-            const SizedBox(width: 8),
-            _keypadBtn('6'),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _keypadBtn('7'),
-            const SizedBox(width: 8),
-            _keypadBtn('8'),
-            const SizedBox(width: 8),
-            _keypadBtn('9'),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _keypadActionBtn('Clear', () => controller.clearInput()),
-            const SizedBox(width: 8),
-            _keypadBtn('0'),
-            const SizedBox(width: 8),
-            _keypadActionBtn('⌫', () => controller.deleteNumber()),
-          ],
-        ),
-      ],
+        children: [
+          Row(
+            children: [
+              _TvKeypadButton(
+                label: '1',
+                autofocus: true,
+                onTap: () => controller.appendNumber('1'),
+              ),
+              const SizedBox(width: 8),
+              _TvKeypadButton(
+                label: '2',
+                onTap: () => controller.appendNumber('2'),
+              ),
+              const SizedBox(width: 8),
+              _TvKeypadButton(
+                label: '3',
+                onTap: () => controller.appendNumber('3'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _TvKeypadButton(
+                label: '4',
+                onTap: () => controller.appendNumber('4'),
+              ),
+              const SizedBox(width: 8),
+              _TvKeypadButton(
+                label: '5',
+                onTap: () => controller.appendNumber('5'),
+              ),
+              const SizedBox(width: 8),
+              _TvKeypadButton(
+                label: '6',
+                onTap: () => controller.appendNumber('6'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _TvKeypadButton(
+                label: '7',
+                onTap: () => controller.appendNumber('7'),
+              ),
+              const SizedBox(width: 8),
+              _TvKeypadButton(
+                label: '8',
+                onTap: () => controller.appendNumber('8'),
+              ),
+              const SizedBox(width: 8),
+              _TvKeypadButton(
+                label: '9',
+                onTap: () => controller.appendNumber('9'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _TvKeypadButton(
+                label: 'Clear',
+                isAction: true,
+                onTap: controller.clearInput,
+              ),
+              const SizedBox(width: 8),
+              _TvKeypadButton(
+                label: '0',
+                onTap: () => controller.appendNumber('0'),
+              ),
+              const SizedBox(width: 8),
+              _TvKeypadButton(
+                label: '⌫',
+                isAction: true,
+                onTap: controller.deleteNumber,
+              ),
+            ],
+          ),
+        ],
     );
   }
+}
 
-  Widget _keypadBtn(String label) {
+/// Robust, Remote D-Pad Focusable Keypad Button for Fire TV / Android TV
+class _TvKeypadButton extends StatefulWidget {
+  final String label;
+  final VoidCallback onTap;
+  final bool autofocus;
+  final bool isAction;
+
+  const _TvKeypadButton({
+    required this.label,
+    required this.onTap,
+    this.autofocus = false,
+    this.isAction = false,
+  });
+
+  @override
+  State<_TvKeypadButton> createState() => _TvKeypadButtonState();
+}
+
+class _TvKeypadButtonState extends State<_TvKeypadButton> {
+  bool _hasFocus = false;
+
+  @override
+  Widget build(BuildContext context) {
     return Expanded(
       child: Focus(
-        child: Builder(
-          builder: (ctx) {
-            final hasFocus = Focus.of(ctx).hasFocus;
-            return Material(
-              color: hasFocus ? AppColors.focusedBackground : AppColors.surfaceCard,
-              borderRadius: BorderRadius.circular(10),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () => controller.appendNumber(label),
+        autofocus: widget.autofocus,
+        onFocusChange: (focused) {
+          if (mounted) setState(() => _hasFocus = focused);
+        },
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            // Handle Fire TV Remote Center / Select button, Enter, and Gamepad A
+            if (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter ||
+                event.logicalKey == LogicalKeyboardKey.numpadEnter ||
+                event.logicalKey == LogicalKeyboardKey.space ||
+                event.logicalKey == LogicalKeyboardKey.gameButtonA) {
+              widget.onTap();
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedScale(
+            scale: _hasFocus ? 1.08 : 1.0,
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOutCubic,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              height: 48,
+              decoration: BoxDecoration(
+                color: _hasFocus
+                    ? (widget.isAction
+                        ? AppColors.secondary.withValues(alpha: 0.35)
+                        : AppColors.primaryLight.withValues(alpha: 0.30))
+                    : AppColors.surfaceCard,
                 borderRadius: BorderRadius.circular(10),
-                splashColor: AppColors.primaryLight.withValues(alpha: 0.30),
-                highlightColor: Colors.white.withValues(alpha: 0.10),
-                child: Container(
-                  height: 44,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: hasFocus ? AppColors.primary : AppColors.unfocusedBorder,
-                      width: hasFocus ? 2 : 1,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: hasFocus ? AppColors.primaryLight : Colors.white,
-                    ),
-                  ),
+                border: Border.all(
+                  color: _hasFocus
+                      ? (widget.isAction ? AppColors.secondary : AppColors.primaryLight)
+                      : Colors.white.withValues(alpha: 0.12),
+                  width: _hasFocus ? 2.5 : 1.0,
+                ),
+                boxShadow: _hasFocus
+                    ? [
+                        BoxShadow(
+                          color: (widget.isAction ? AppColors.secondaryGlow : AppColors.primaryGlow)
+                              .withValues(alpha: 0.65),
+                          blurRadius: 18,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : null,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                widget.label,
+                style: TextStyle(
+                  fontSize: widget.label.length > 2 ? 13 : 18,
+                  fontWeight: FontWeight.bold,
+                  color: _hasFocus
+                      ? Colors.white
+                      : (widget.isAction ? Colors.white70 : Colors.white),
                 ),
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
   }
+}
 
-  Widget _keypadActionBtn(String label, VoidCallback onTap) {
-    return Expanded(
-      child: Focus(
-        child: Builder(
-          builder: (ctx) {
-            final hasFocus = Focus.of(ctx).hasFocus;
-            return Material(
-              color: hasFocus ? AppColors.focusedBackground : AppColors.surfaceCard,
-              borderRadius: BorderRadius.circular(10),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(10),
-                splashColor: AppColors.secondary.withValues(alpha: 0.30),
-                highlightColor: Colors.white.withValues(alpha: 0.10),
-                child: Container(
-                  height: 44,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: hasFocus ? AppColors.secondary : AppColors.unfocusedBorder,
-                      width: hasFocus ? 2 : 1,
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: hasFocus ? AppColors.secondary : AppColors.textSecondary,
-                    ),
-                  ),
-                ),
+/// Remote D-Pad Focusable Action Button (Request OTP / Verify OTP)
+class _TvActionButton extends StatefulWidget {
+  final String label;
+  final VoidCallback? onTap;
+  final bool isLoading;
+  final bool isEnabled;
+
+  const _TvActionButton({
+    required this.label,
+    required this.onTap,
+    this.isLoading = false,
+    this.isEnabled = false,
+  });
+
+  @override
+  State<_TvActionButton> createState() => _TvActionButtonState();
+}
+
+class _TvActionButtonState extends State<_TvActionButton> {
+  bool _hasFocus = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onFocusChange: (focused) {
+        if (mounted) setState(() => _hasFocus = focused);
+      },
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.select ||
+              event.logicalKey == LogicalKeyboardKey.enter ||
+              event.logicalKey == LogicalKeyboardKey.numpadEnter ||
+              event.logicalKey == LogicalKeyboardKey.space ||
+              event.logicalKey == LogicalKeyboardKey.gameButtonA) {
+            if (widget.isEnabled && !widget.isLoading && widget.onTap != null) {
+              widget.onTap!();
+              return KeyEventResult.handled;
+            }
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: (widget.isEnabled && !widget.isLoading) ? widget.onTap : null,
+        child: AnimatedScale(
+          scale: _hasFocus ? 1.04 : 1.0,
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              gradient: widget.isEnabled ? AppColors.activeTabGradient : null,
+              color: widget.isEnabled ? null : Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _hasFocus
+                    ? Colors.white
+                    : (widget.isEnabled ? Colors.transparent : Colors.white.withValues(alpha: 0.08)),
+                width: _hasFocus ? 2.5 : 1,
               ),
-            );
-          },
+              boxShadow: _hasFocus
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primaryGlow.withValues(alpha: 0.65),
+                        blurRadius: 20,
+                        spreadRadius: 2,
+                      ),
+                    ]
+                  : (widget.isEnabled
+                      ? [
+                          BoxShadow(
+                            color: AppColors.secondaryGlow.withValues(alpha: 0.40),
+                            blurRadius: 14,
+                          ),
+                        ]
+                      : null),
+            ),
+            child: Center(
+              child: widget.isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      widget.label,
+                      style: TextStyle(
+                        color: widget.isEnabled ? Colors.white : Colors.white38,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Remote D-Pad Focusable Text Button for Change / Resend Code
+class _FocusableTextButton extends StatefulWidget {
+  final String label;
+  final VoidCallback? onTap;
+
+  const _FocusableTextButton({
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  State<_FocusableTextButton> createState() => _FocusableTextButtonState();
+}
+
+class _FocusableTextButtonState extends State<_FocusableTextButton> {
+  bool _hasFocus = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onFocusChange: (f) {
+        if (mounted) setState(() => _hasFocus = f);
+      },
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.select ||
+              event.logicalKey == LogicalKeyboardKey.enter ||
+              event.logicalKey == LogicalKeyboardKey.space) {
+            if (widget.onTap != null) {
+              widget.onTap!();
+              return KeyEventResult.handled;
+            }
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: _hasFocus ? AppColors.primaryLight.withValues(alpha: 0.20) : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: _hasFocus ? AppColors.primaryLight : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Text(
+            widget.label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: _hasFocus ? Colors.white : AppColors.primaryLight,
+            ),
+          ),
         ),
       ),
     );

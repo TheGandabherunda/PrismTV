@@ -50,7 +50,8 @@ class HomeView extends GetView<HomeController> {
   }
 
   Widget _buildLiveTvView(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final size = MediaQuery.of(context).size;
+    final isMobile = size.width < 800 && size.width < size.height;
 
     return Stack(
       children: [
@@ -103,7 +104,8 @@ class HomeView extends GetView<HomeController> {
   }
 
   Widget _buildTopHeader(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 800;
+    final size = MediaQuery.of(context).size;
+    final isMobile = size.width < 800 && size.width < size.height;
 
     if (isMobile) {
       return SafeArea(

@@ -1,8 +1,11 @@
 package org.thegandabherunda.prismtv
 
+import android.app.UiModeManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
@@ -20,10 +23,26 @@ class MainActivity : FlutterActivity() {
     private val UPDATE_CHANNEL = "org.thegandabherunda.prismtv/app_updater"
     private val DEVICE_CONTROL_CHANNEL = "org.thegandabherunda.prismtv/device_control"
 
+    private fun isTvDevice(): Boolean {
+        val uiModeManager = getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+        val isUiModeTv = uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
+        val hasLeanback = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+        val hasTvFeature = packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
+        val isFireTv = packageManager.hasSystemFeature("amazon.hardware.fire_tv") ||
+                       Build.MODEL.contains("AFT", ignoreCase = true) ||
+                       Build.MANUFACTURER.contains("Amazon", ignoreCase = true)
+        return isUiModeTv || hasLeanback || hasTvFeature || isFireTv
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Explicitly allow screenshots, screen recording, and casting (no FLAG_SECURE)
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+
+        // Lock Fire TV and Android TV devices to widescreen landscape immediately
+        if (isTvDevice()) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -136,6 +155,9 @@ class MainActivity : FlutterActivity() {
         // 2. Hardware Device Controls (Brightness & Volume with 0ms OS overhead)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_CONTROL_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
+                "isTvDevice" -> {
+                    result.success(isTvDevice())
+                }
                 "getBrightness" -> {
                     try {
                         val lp = window.attributes

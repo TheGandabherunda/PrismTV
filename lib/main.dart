@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -21,10 +23,32 @@ void main() async {
     return const SizedBox.shrink();
   };
 
-  // Lock mobile app to portrait by default (fullscreen player dynamically unlocks landscape)
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  // Fire TV Stick, Android TV, Google TV, Web, and Desktop run in Widescreen Landscape!
+  // Only handheld mobile phones default to portrait.
+  bool isTv = false;
+  if (!kIsWeb && Platform.isAndroid) {
+    try {
+      const channel = MethodChannel('org.thegandabherunda.prismtv/device_control');
+      isTv = await channel.invokeMethod<bool>('isTvDevice') ?? false;
+    } catch (_) {}
+  }
+
+  if (isTv || kIsWeb) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  } else if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+  } else {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+      DeviceOrientation.portraitUp,
+    ]);
+  }
 
   // Smart TV Fullscreen / Leanback flags
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);

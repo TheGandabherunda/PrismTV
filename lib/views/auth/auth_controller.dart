@@ -88,7 +88,9 @@ class AuthController extends GetxController {
       appendNumber(digitMap[key]!);
     } else if (key == LogicalKeyboardKey.backspace || key == LogicalKeyboardKey.delete) {
       deleteNumber();
-    } else if (key == LogicalKeyboardKey.enter || key == LogicalKeyboardKey.numpadEnter) {
+    } else if (key == LogicalKeyboardKey.enter ||
+               key == LogicalKeyboardKey.numpadEnter ||
+               key == LogicalKeyboardKey.select) {
       if (!isLoading.value) {
         if (isOtpSent.value) {
           verifyOtp();

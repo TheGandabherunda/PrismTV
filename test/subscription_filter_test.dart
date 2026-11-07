@@ -163,9 +163,8 @@ void main() {
       final dummyPayload = jsonEncode({
         'data': {'extra': inner}
       });
-      final base64Payload = 'eyJhbGciOiJIUzI1NiJ9.' +
-          base64Url.encode(utf8.encode(dummyPayload)).replaceAll('=', '') +
-          '.signature';
+      final base64Payload =
+          'eyJhbGciOiJIUzI1NiJ9.${base64Url.encode(utf8.encode(dummyPayload)).replaceAll('=', '')}.signature';
 
       final extracted = AuthSession.extractPackagesFromJwt(base64Payload);
       expect(extracted.length, 1);
