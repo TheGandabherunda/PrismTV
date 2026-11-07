@@ -246,38 +246,74 @@ class UpdateToastOverlay extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 10),
-        // Action: Download & Install
-        InkWell(
-          onTap: updateService.downloadAndInstall,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Text(
-              'Update',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+        // Action: Download & Install (TV Remote focusable)
+        Focus(
+          child: Builder(
+            builder: (ctx) {
+              final hasFocus = Focus.of(ctx).hasFocus;
+              return InkWell(
+                onTap: updateService.downloadAndInstall,
+                borderRadius: BorderRadius.circular(16),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: hasFocus ? Colors.white : Colors.transparent,
+                      width: hasFocus ? 2.0 : 1.0,
+                    ),
+                    boxShadow: hasFocus
+                        ? const [
+                            BoxShadow(
+                              color: AppColors.primaryGlow,
+                              blurRadius: 12,
+                              spreadRadius: 2,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: const Text(
+                    'Update',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
         const SizedBox(width: 6),
-        // Dismiss button
-        InkWell(
-          onTap: updateService.dismissToast,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: Icon(
-              Icons.close_rounded,
-              color: Colors.white.withValues(alpha: 0.5),
-              size: 18,
-            ),
+        // Dismiss button (TV Remote focusable)
+        Focus(
+          child: Builder(
+            builder: (ctx) {
+              final hasFocus = Focus.of(ctx).hasFocus;
+              return InkWell(
+                onTap: updateService.dismissToast,
+                borderRadius: BorderRadius.circular(16),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: hasFocus ? Colors.white : Colors.transparent,
+                      width: hasFocus ? 2.0 : 1.0,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: hasFocus ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                    size: 18,
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -355,37 +391,72 @@ class UpdateToastOverlay extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        InkWell(
-          onTap: updateService.openUnknownSourcesSettings,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.secondary.withValues(alpha: 0.25),
-              border: Border.all(color: AppColors.secondary.withValues(alpha: 0.5)),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Text(
-              'Settings',
-              style: TextStyle(
-                color: AppColors.secondary,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+        Focus(
+          child: Builder(
+            builder: (ctx) {
+              final hasFocus = Focus.of(ctx).hasFocus;
+              return InkWell(
+                onTap: updateService.openUnknownSourcesSettings,
+                borderRadius: BorderRadius.circular(14),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary.withValues(alpha: 0.25),
+                    border: Border.all(
+                      color: hasFocus ? Colors.white : AppColors.secondary.withValues(alpha: 0.5),
+                      width: hasFocus ? 2.0 : 1.0,
+                    ),
+                    boxShadow: hasFocus
+                        ? const [
+                            BoxShadow(
+                              color: AppColors.secondaryGlow,
+                              blurRadius: 10,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : null,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Text(
+                    'Settings',
+                    style: TextStyle(
+                      color: AppColors.secondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
         const SizedBox(width: 4),
-        InkWell(
-          onTap: () => updateService.showPermissionToast.value = false,
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: Icon(
-              Icons.close_rounded,
-              color: Colors.white.withValues(alpha: 0.5),
-              size: 18,
-            ),
+        Focus(
+          child: Builder(
+            builder: (ctx) {
+              final hasFocus = Focus.of(ctx).hasFocus;
+              return InkWell(
+                onTap: () => updateService.showPermissionToast.value = false,
+                borderRadius: BorderRadius.circular(16),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: hasFocus ? Colors.white : Colors.transparent,
+                      width: hasFocus ? 2.0 : 1.0,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: hasFocus ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                    size: 18,
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],

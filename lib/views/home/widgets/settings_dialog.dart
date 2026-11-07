@@ -146,6 +146,20 @@ class _SettingsDialogState extends State<SettingsDialog> {
           ),
           const SizedBox(width: 8),
           Focus(
+            onKeyEvent: (node, event) {
+              if (event is KeyDownEvent) {
+                if (event.logicalKey == LogicalKeyboardKey.select ||
+                    event.logicalKey == LogicalKeyboardKey.enter ||
+                    event.logicalKey == LogicalKeyboardKey.space ||
+                    event.logicalKey == LogicalKeyboardKey.gameButtonA ||
+                    event.logicalKey == LogicalKeyboardKey.gameButtonSelect ||
+                    event.logicalKey == LogicalKeyboardKey.accept) {
+                  Get.back();
+                  return KeyEventResult.handled;
+                }
+              }
+              return KeyEventResult.ignored;
+            },
             child: Builder(
               builder: (ctx) {
                 final hasFocus = Focus.of(ctx).hasFocus;

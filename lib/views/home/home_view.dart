@@ -608,63 +608,74 @@ class _HeaderSettingsButton extends StatefulWidget {
 
 class _HeaderSettingsButtonState extends State<_HeaderSettingsButton> {
   bool _isHovered = false;
+  bool _hasFocus = false;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: 'Settings & Preferences',
       child: Focus(
-        child: Builder(
-          builder: (ctx) {
-            final hasFocus = Focus.of(ctx).hasFocus;
-            return MouseRegion(
-              onEnter: (_) => setState(() => _isHovered = true),
-              onExit: (_) => setState(() => _isHovered = false),
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: widget.onTap,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: _isHovered || hasFocus
-                        ? const Color(0x40A839C7)
-                        : const Color(0x2E161824),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: _isHovered || hasFocus
-                          ? AppColors.primaryLight.withValues(alpha: 0.6)
-                          : Colors.white.withValues(alpha: 0.16),
-                      width: 1.0,
-                    ),
-                    boxShadow: _isHovered || hasFocus
-                        ? const [
-                            BoxShadow(
-                              color: AppColors.primaryGlow,
-                              blurRadius: 14,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.25),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                  ),
-                  child: Center(
-                    child: Icon(
-                      Icons.settings_rounded,
-                      size: 21,
-                      color: _isHovered || hasFocus ? Colors.white : Colors.white70,
-                    ),
-                  ),
+        onFocusChange: (f) => setState(() => _hasFocus = f),
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter ||
+                event.logicalKey == LogicalKeyboardKey.space ||
+                event.logicalKey == LogicalKeyboardKey.gameButtonA ||
+                event.logicalKey == LogicalKeyboardKey.gameButtonSelect ||
+                event.logicalKey == LogicalKeyboardKey.accept) {
+              widget.onTap();
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _isHovered = true),
+          onExit: (_) => setState(() => _isHovered = false),
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: widget.onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: _isHovered || _hasFocus
+                    ? const Color(0x40A839C7)
+                    : const Color(0x2E161824),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: _isHovered || _hasFocus
+                      ? AppColors.primaryLight
+                      : Colors.white.withValues(alpha: 0.16),
+                  width: _hasFocus ? 2.0 : 1.0,
+                ),
+                boxShadow: _isHovered || _hasFocus
+                    ? const [
+                        BoxShadow(
+                          color: AppColors.primaryGlow,
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+              ),
+              child: Center(
+                child: Icon(
+                  Icons.settings_rounded,
+                  size: 21,
+                  color: _isHovered || _hasFocus ? Colors.white : Colors.white70,
                 ),
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
@@ -687,93 +698,97 @@ class _HeaderAccountButton extends StatefulWidget {
 
 class _HeaderAccountButtonState extends State<_HeaderAccountButton> {
   bool _isHovered = false;
+  bool _hasFocus = false;
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: widget.isAuthenticated ? 'Account Profile' : 'Sign In',
       child: Focus(
-        child: Builder(
-          builder: (ctx) {
-            final hasFocus = Focus.of(ctx).hasFocus;
-            return MouseRegion(
-              onEnter: (_) => setState(() => _isHovered = true),
-              onExit: (_) => setState(() => _isHovered = false),
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: widget.onTap,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    color: _isHovered || hasFocus
-                        ? const Color(0x40A839C7)
-                        : const Color(0x2E161824),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: _isHovered || hasFocus
-                          ? AppColors.primaryLight.withValues(alpha: 0.6)
-                          : Colors.white.withValues(alpha: 0.16),
-                      width: 1.0,
+        onFocusChange: (f) => setState(() => _hasFocus = f),
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.select ||
+                event.logicalKey == LogicalKeyboardKey.enter ||
+                event.logicalKey == LogicalKeyboardKey.space ||
+                event.logicalKey == LogicalKeyboardKey.gameButtonA ||
+                event.logicalKey == LogicalKeyboardKey.gameButtonSelect ||
+                event.logicalKey == LogicalKeyboardKey.accept) {
+              widget.onTap();
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _isHovered = true),
+          onExit: (_) => setState(() => _isHovered = false),
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: widget.onTap,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: _isHovered || _hasFocus
+                    ? const Color(0x40A839C7)
+                    : const Color(0x2E161824),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: _isHovered || _hasFocus
+                      ? AppColors.primaryLight
+                      : Colors.white.withValues(alpha: 0.16),
+                  width: _hasFocus ? 2.0 : 1.0,
+                ),
+                boxShadow: _isHovered || _hasFocus
+                    ? const [
+                        BoxShadow(
+                          color: AppColors.primaryGlow,
+                          blurRadius: 16,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  ShaderMask(
+                    shaderCallback: (bounds) => const LinearGradient(
+                      colors: [Color(0xFFFF7B60), Color(0xFFA839C7)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ).createShader(bounds),
+                    child: Icon(
+                      widget.isAuthenticated ? Icons.person_rounded : Icons.login_rounded,
+                      size: 21,
+                      color: Colors.white,
                     ),
-                    boxShadow: _isHovered || hasFocus
-                        ? const [
-                            BoxShadow(
-                              color: AppColors.primaryGlow,
-                              blurRadius: 14,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.25),
-                              blurRadius: 10,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
                   ),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      ShaderMask(
-                        shaderCallback: (bounds) => const LinearGradient(
-                          colors: [Color(0xFFFF7B60), Color(0xFFA839C7)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ).createShader(bounds),
-                        child: Icon(
-                          widget.isAuthenticated ? Icons.person_rounded : Icons.login_rounded,
-                          size: 21,
-                          color: Colors.white,
+                  if (widget.isAuthenticated)
+                    Positioned(
+                      right: 7,
+                      top: 7,
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF00E676),
+                          shape: BoxShape.circle,
                         ),
                       ),
-                      if (widget.isAuthenticated)
-                        Positioned(
-                          right: 7,
-                          top: 7,
-                          child: Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF00E676),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Color(0x8800E676),
-                                  blurRadius: 4,
-                                  spreadRadius: 1,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                    ),
+                ],
               ),
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
@@ -962,6 +977,7 @@ class _CinejoyFilterButtonState extends State<_CinejoyFilterButton> {
   OverlayEntry? _overlayEntry;
   bool _isOpen = false;
   bool _isHovered = false;
+  bool _hasFocus = false;
   _FilterSubMenu _activeSubMenu = _FilterSubMenu.category;
 
   void _openMobileFilterSheet() {
@@ -1378,42 +1394,65 @@ class _CinejoyFilterButtonState extends State<_CinejoyFilterButton> {
         final hasActive = widget.controller.hasActiveFilters;
         final count = widget.controller.activeFilterCount;
 
-        return MouseRegion(
-          onEnter: (_) => setState(() => _isHovered = true),
-          onExit: (_) => setState(() => _isHovered = false),
-          cursor: SystemMouseCursors.click,
-          child: GestureDetector(
-            onTap: _toggle,
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              height: 34,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              margin: const EdgeInsets.only(right: 4),
-              decoration: BoxDecoration(
-                color: hasActive || _isOpen
-                    ? AppColors.primary.withValues(alpha: 0.35)
-                    : (_isHovered ? Colors.white.withValues(alpha: 0.12) : Colors.transparent),
-                borderRadius: BorderRadius.circular(17),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    hasActive ? 'Filters ($count)' : 'Filters',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: hasActive ? FontWeight.w700 : FontWeight.w500,
-                      color: hasActive ? Colors.white : Colors.white.withValues(alpha: 0.90),
+        return Focus(
+          onFocusChange: (f) => setState(() => _hasFocus = f),
+          onKeyEvent: (node, event) {
+            if (event is KeyDownEvent) {
+              if (event.logicalKey == LogicalKeyboardKey.select ||
+                  event.logicalKey == LogicalKeyboardKey.enter ||
+                  event.logicalKey == LogicalKeyboardKey.space ||
+                  event.logicalKey == LogicalKeyboardKey.gameButtonA ||
+                  event.logicalKey == LogicalKeyboardKey.gameButtonSelect ||
+                  event.logicalKey == LogicalKeyboardKey.accept) {
+                _toggle();
+                return KeyEventResult.handled;
+              }
+            }
+            return KeyEventResult.ignored;
+          },
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _isHovered = true),
+            onExit: (_) => setState(() => _isHovered = false),
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: _toggle,
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                height: 34,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                margin: const EdgeInsets.only(right: 4),
+                decoration: BoxDecoration(
+                  color: hasActive || _isOpen || _hasFocus
+                      ? AppColors.primary.withValues(alpha: 0.35)
+                      : (_isHovered ? Colors.white.withValues(alpha: 0.12) : Colors.transparent),
+                  borderRadius: BorderRadius.circular(17),
+                  border: Border.all(
+                    color: _hasFocus
+                        ? AppColors.primaryLight
+                        : (hasActive || _isOpen ? AppColors.primary.withValues(alpha: 0.5) : Colors.transparent),
+                    width: _hasFocus ? 1.5 : 1.0,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      hasActive ? 'Filters ($count)' : 'Filters',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: hasActive ? FontWeight.w700 : FontWeight.w500,
+                        color: hasActive ? Colors.white : Colors.white.withValues(alpha: 0.90),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    _isOpen ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    size: 16,
-                    color: hasActive || _isOpen ? Colors.white : Colors.white54,
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Icon(
+                      _isOpen ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                      size: 16,
+                      color: hasActive || _isOpen || _hasFocus ? Colors.white : Colors.white54,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1442,62 +1481,94 @@ class _FilterMenuTile extends StatefulWidget {
 
 class _FilterMenuTileState extends State<_FilterMenuTile> {
   bool _isHovered = false;
+  bool _hasFocus = false;
 
   @override
   Widget build(BuildContext context) {
-    final highlighted = widget.isSelected || _isHovered;
+    final highlighted = widget.isSelected || _isHovered || _hasFocus;
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) {
-        setState(() => _isHovered = true);
-        widget.onTap(); // Keep secondary flyout in sync on hover
+    return Focus(
+      onFocusChange: (f) {
+        setState(() => _hasFocus = f);
+        if (f) widget.onTap(); // Keep secondary flyout in sync when navigating with TV remote
       },
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          decoration: BoxDecoration(
-            color: widget.isSelected
-                ? Colors.white.withValues(alpha: 0.12)
-                : (_isHovered ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.select ||
+              event.logicalKey == LogicalKeyboardKey.enter ||
+              event.logicalKey == LogicalKeyboardKey.space ||
+              event.logicalKey == LogicalKeyboardKey.gameButtonA ||
+              event.logicalKey == LogicalKeyboardKey.gameButtonSelect ||
+              event.logicalKey == LogicalKeyboardKey.accept) {
+            widget.onTap();
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) {
+          setState(() => _isHovered = true);
+          widget.onTap(); // Keep secondary flyout in sync on hover
+        },
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
               color: widget.isSelected
-                  ? Colors.white.withValues(alpha: 0.15)
-                  : (_isHovered ? Colors.white.withValues(alpha: 0.10) : Colors.transparent),
-              width: 1.0,
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : (_isHovered || _hasFocus ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _hasFocus
+                    ? AppColors.primaryLight
+                    : (widget.isSelected
+                        ? Colors.white.withValues(alpha: 0.15)
+                        : (_isHovered ? Colors.white.withValues(alpha: 0.10) : Colors.transparent)),
+                width: _hasFocus ? 1.5 : 1.0,
+              ),
+              boxShadow: _hasFocus
+                  ? const [
+                      BoxShadow(
+                        color: AppColors.primaryGlow,
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
             ),
-          ),
-          child: Row(
-            children: [
-              Text(
-                widget.title,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: highlighted ? FontWeight.w700 : FontWeight.w500,
-                  color: Colors.white,
+            child: Row(
+              children: [
+                Text(
+                  widget.title,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: highlighted ? FontWeight.w700 : FontWeight.w500,
+                    color: Colors.white,
+                  ),
                 ),
-              ),
-              const Spacer(),
-              Text(
-                widget.subtitle,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: highlighted ? FontWeight.w600 : FontWeight.w400,
-                  color: highlighted ? Colors.white.withValues(alpha: 0.75) : Colors.white.withValues(alpha: 0.45),
+                const Spacer(),
+                Text(
+                  widget.subtitle,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: highlighted ? FontWeight.w600 : FontWeight.w400,
+                    color: highlighted ? Colors.white.withValues(alpha: 0.75) : Colors.white.withValues(alpha: 0.45),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 16,
-                color: highlighted ? Colors.white : Colors.white38,
-              ),
-            ],
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 16,
+                  color: highlighted ? Colors.white : Colors.white38,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1524,83 +1595,112 @@ class _FilterSubMenuTile extends StatefulWidget {
 
 class _FilterSubMenuTileState extends State<_FilterSubMenuTile> {
   bool _isHovered = false;
+  bool _hasFocus = false;
 
   @override
   Widget build(BuildContext context) {
-    final highlighted = widget.isSelected || _isHovered;
+    final highlighted = widget.isSelected || _isHovered || _hasFocus;
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 140),
-          margin: const EdgeInsets.symmetric(vertical: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            color: widget.isSelected
-                ? AppColors.primary.withValues(alpha: 0.20)
-                : (_isHovered ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
+    return Focus(
+      onFocusChange: (f) => setState(() => _hasFocus = f),
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.select ||
+              event.logicalKey == LogicalKeyboardKey.enter ||
+              event.logicalKey == LogicalKeyboardKey.space ||
+              event.logicalKey == LogicalKeyboardKey.gameButtonA ||
+              event.logicalKey == LogicalKeyboardKey.gameButtonSelect ||
+              event.logicalKey == LogicalKeyboardKey.accept) {
+            widget.onTap();
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
               color: widget.isSelected
-                  ? AppColors.primaryLight.withValues(alpha: 0.40)
-                  : (_isHovered ? Colors.white.withValues(alpha: 0.12) : Colors.transparent),
-              width: 1.0,
+                  ? AppColors.primary.withValues(alpha: 0.20)
+                  : (_isHovered || _hasFocus ? Colors.white.withValues(alpha: 0.08) : Colors.transparent),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: _hasFocus
+                    ? AppColors.primaryLight
+                    : (widget.isSelected
+                        ? AppColors.primaryLight.withValues(alpha: 0.40)
+                        : (_isHovered ? Colors.white.withValues(alpha: 0.12) : Colors.transparent)),
+                width: _hasFocus ? 1.5 : 1.0,
+              ),
+              boxShadow: _hasFocus
+                  ? const [
+                      BoxShadow(
+                        color: AppColors.primaryGlow,
+                        blurRadius: 10,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
             ),
-          ),
-          child: Row(
-            children: [
-              // Custom check indicator with glow
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 140),
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: widget.isSelected ? AppColors.primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(
-                    color: widget.isSelected
-                        ? AppColors.primaryLight
-                        : (_isHovered
-                            ? Colors.white.withValues(alpha: 0.50)
-                            : Colors.white.withValues(alpha: 0.25)),
-                    width: 1.5,
+            child: Row(
+              children: [
+                // Custom check indicator with glow
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: widget.isSelected ? AppColors.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(
+                      color: widget.isSelected
+                          ? AppColors.primaryLight
+                          : (_isHovered || _hasFocus
+                              ? Colors.white.withValues(alpha: 0.50)
+                              : Colors.white.withValues(alpha: 0.25)),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: widget.isSelected
+                      ? const Icon(Icons.check_rounded, size: 13, color: Colors.white)
+                      : null,
+                ),
+                const SizedBox(width: 10),
+
+                // Item Title
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: highlighted ? FontWeight.w600 : FontWeight.w400,
+                      color: highlighted ? Colors.white : Colors.white.withValues(alpha: 0.85),
+                    ),
                   ),
                 ),
-                child: widget.isSelected
-                    ? const Icon(Icons.check_rounded, size: 13, color: Colors.white)
-                    : null,
-              ),
-              const SizedBox(width: 10),
 
-              // Item Title
-              Expanded(
-                child: Text(
-                  widget.title,
+                // Channel Count Pill
+                Text(
+                  '(${widget.count})',
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: highlighted ? FontWeight.w600 : FontWeight.w400,
-                    color: highlighted ? Colors.white : Colors.white.withValues(alpha: 0.85),
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    color: highlighted
+                        ? Colors.white.withValues(alpha: 0.70)
+                        : Colors.white.withValues(alpha: 0.40),
                   ),
                 ),
-              ),
-
-              // Channel Count Pill
-              Text(
-                '(${widget.count})',
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w500,
-                  color: highlighted
-                      ? Colors.white.withValues(alpha: 0.70)
-                      : Colors.white.withValues(alpha: 0.40),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

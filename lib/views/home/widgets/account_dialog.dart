@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../../core/constants/app_colors.dart';
 import '../home_controller.dart';
@@ -56,12 +57,37 @@ class AccountDialog extends StatelessWidget {
                         letterSpacing: -0.2,
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20, color: Colors.white70),
-                      onPressed: () => Get.back(),
-                      splashRadius: 18,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    Focus(
+                      onKeyEvent: (node, event) {
+                        if (event is KeyDownEvent) {
+                          if (event.logicalKey == LogicalKeyboardKey.select ||
+                              event.logicalKey == LogicalKeyboardKey.enter ||
+                              event.logicalKey == LogicalKeyboardKey.space ||
+                              event.logicalKey == LogicalKeyboardKey.gameButtonA ||
+                              event.logicalKey == LogicalKeyboardKey.gameButtonSelect ||
+                              event.logicalKey == LogicalKeyboardKey.accept) {
+                            Get.back();
+                            return KeyEventResult.handled;
+                          }
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: Builder(
+                        builder: (ctx) {
+                          final hasFocus = Focus.of(ctx).hasFocus;
+                          return IconButton(
+                            icon: Icon(
+                              Icons.close_rounded,
+                              size: 20,
+                              color: hasFocus ? Colors.white : Colors.white70,
+                            ),
+                            onPressed: () => Get.back(),
+                            splashRadius: 18,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          );
+                        },
+                      ),
                     ),
                   ],
                 ),

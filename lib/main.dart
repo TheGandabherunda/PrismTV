@@ -104,11 +104,19 @@ class PrismTvApp extends StatelessWidget {
       initialRoute: AppPages.initial,
       getPages: AppPages.routes,
       builder: (context, child) {
-        return Stack(
-          children: [
-            ?child,
-            const UpdateToastOverlay(),
-          ],
+        return Shortcuts(
+          shortcuts: <ShortcutActivator, Intent>{
+            ...WidgetsApp.defaultShortcuts,
+            const SingleActivator(LogicalKeyboardKey.select): const ActivateIntent(),
+            const SingleActivator(LogicalKeyboardKey.accept): const ActivateIntent(),
+            const SingleActivator(LogicalKeyboardKey.gameButtonSelect): const ActivateIntent(),
+          },
+          child: Stack(
+            children: [
+              ?child,
+              const UpdateToastOverlay(),
+            ],
+          ),
         );
       },
     );

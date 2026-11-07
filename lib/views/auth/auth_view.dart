@@ -564,12 +564,14 @@ class _TvKeypadButtonState extends State<_TvKeypadButton> {
         },
         onKeyEvent: (node, event) {
           if (event is KeyDownEvent) {
-            // Handle Fire TV Remote Center / Select button, Enter, and Gamepad A
+            // Handle Fire TV Remote Center / Select button, Enter, Gamepad A, and Accept
             if (event.logicalKey == LogicalKeyboardKey.select ||
                 event.logicalKey == LogicalKeyboardKey.enter ||
                 event.logicalKey == LogicalKeyboardKey.numpadEnter ||
                 event.logicalKey == LogicalKeyboardKey.space ||
-                event.logicalKey == LogicalKeyboardKey.gameButtonA) {
+                event.logicalKey == LogicalKeyboardKey.gameButtonA ||
+                event.logicalKey == LogicalKeyboardKey.gameButtonSelect ||
+                event.logicalKey == LogicalKeyboardKey.accept) {
               widget.onTap();
               return KeyEventResult.handled;
             }
@@ -661,7 +663,9 @@ class _TvActionButtonState extends State<_TvActionButton> {
               event.logicalKey == LogicalKeyboardKey.enter ||
               event.logicalKey == LogicalKeyboardKey.numpadEnter ||
               event.logicalKey == LogicalKeyboardKey.space ||
-              event.logicalKey == LogicalKeyboardKey.gameButtonA) {
+              event.logicalKey == LogicalKeyboardKey.gameButtonA ||
+              event.logicalKey == LogicalKeyboardKey.gameButtonSelect ||
+              event.logicalKey == LogicalKeyboardKey.accept) {
             if (widget.isEnabled && !widget.isLoading && widget.onTap != null) {
               widget.onTap!();
               return KeyEventResult.handled;
@@ -760,7 +764,10 @@ class _FocusableTextButtonState extends State<_FocusableTextButton> {
         if (event is KeyDownEvent) {
           if (event.logicalKey == LogicalKeyboardKey.select ||
               event.logicalKey == LogicalKeyboardKey.enter ||
-              event.logicalKey == LogicalKeyboardKey.space) {
+              event.logicalKey == LogicalKeyboardKey.space ||
+              event.logicalKey == LogicalKeyboardKey.gameButtonA ||
+              event.logicalKey == LogicalKeyboardKey.gameButtonSelect ||
+              event.logicalKey == LogicalKeyboardKey.accept) {
             if (widget.onTap != null) {
               widget.onTap!();
               return KeyEventResult.handled;
